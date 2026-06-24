@@ -3,14 +3,16 @@ services:
     image: robmoraes/dslab-whoami:latest
     networks:
       - appnet
-      - traefik-public
     deploy:
       replicas: 5
+      labels:
+        - traefik.enable=false
 
   waf:
     image: owasp/modsecurity-crs:nginx
 
     networks:
+      - appnet
       - traefik-public
 
     deploy:
