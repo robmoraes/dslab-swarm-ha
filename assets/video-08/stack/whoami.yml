@@ -5,14 +5,29 @@ services:
       - appnet
       - traefik-public
     deploy:
-      replicas: 1
+      replicas: 5
+
+  waf:
+    image: owasp/modsecurity-crs:nginx
+
+    networks:
+      - traefik-public
+
+    deploy:
+      replicas: 3
 
       labels:
         - traefik.enable=true
 
-        - traefik.http.routers.whoami.rule=Host(`whoami.carlosmoraesrodrigues.dev.br`)
-        - traefik.http.routers.whoami.entrypoints=web
-        - traefik.http.services.whoami.loadbalancer.server.port=8080
+        - traefik.http.routers.whoami-waf.rule=Host(`whoami.carlosmoraesrodrigues.dev.br`)
+        - traefik.http.routers.whoami-waf.entrypoints=web
+        - traefik.http.services.whoami-waf.loadbalancer.server.port=8080
+
+    environment:
+      - BACKEND=http://whoami_api:8080
+      - PARANOIA=1
+      - ANOMALY_INBOUND=5
+      - ANOMALY_OUTBOUND=4
 
 networks:
   appnet:
