@@ -1,0 +1,135 @@
+<h1 id="dslab-cluster-docker-swarm-on-aws">DSLab | Cluster Docker Swarm
+on AWS</h1>
+<h2 id="video-01---intro">Video 01 - Intro</h2>
+<ul>
+<li>Apresentação</li>
+<li>Blueprint (ilustracao):
+<ul>
+<li>Fluxo desde o browser até o cluster</li>
+<li>Registro.BR</li>
+<li>AWS Route 53</li>
+<li>AWS ACM</li>
+<li>AWS ALB</li>
+<li>Target Goups</li>
+<li>Cluster
+<ul>
+<li>Traefik</li>
+<li>Managers</li>
+<li>Workers</li>
+<li>Workloads</li>
+</ul></li>
+</ul></li>
+</ul>
+<h2 id="video-02---iam---um-usuário-para-o-dslab">Video 02 - IAM - Um
+usuário para o DSLab</h2>
+<ul>
+<li>Requisitos
+<ul>
+<li>Conta free tier na AWS</li>
+<li>Familiaridade com o Console da AWS</li>
+</ul></li>
+<li>Login com <code>admin</code>
+<ul>
+<li>Acesso ao <code>Identity and Access Management</code>
+(<code>IAM</code>)</li>
+<li>Criação da Policy <code>DSLabProvisionerPolicy</code>
+<ul>
+<li>Permissão para IAM:MFA</li>
+</ul></li>
+<li>Criação do Grupo <code>DSLabProvisioners</code></li>
+<li>Criação do User <code>dslab</code></li>
+</ul></li>
+<li>Login com <code>dslab</code>
+<ul>
+<li>Ativação de MFA</li>
+</ul></li>
+<li>Login com <code>dslab</code> e MFA</li>
+</ul>
+<h2 id="primeira-instancia-e-fundamentos">Primeira instancia e
+fundamentos</h2>
+<h3 id="video-03---ec2">Video 03 - EC2</h3>
+<ul>
+<li>Intro</li>
+<li>Login com <code>admin</code>
+<ul>
+<li>IAM: Permissão para <code>EC2</code> na Policy
+<ul>
+<li>Policy: <code>DSLabProvisionerPolicy</code></li>
+<li>EC2:Full</li>
+</ul></li>
+</ul></li>
+<li>Blueprint (excalidraw):
+<ul>
+<li>EC2, EIP e SG</li>
+<li>Acesso SSH (22) e HTTP (8080)</li>
+</ul></li>
+<li>EC2
+<ul>
+<li>SG: Criar Security Group
+<ul>
+<li>Inbound Rule SSH 22 MyIP</li>
+</ul></li>
+<li>Criar Instance</li>
+<li>EIP: Associar Elastic IP</li>
+</ul></li>
+<li>Acessar Instance via SSH</li>
+</ul>
+<h3 id="video-04---docker-bootstrap">Video 04 - Docker Bootstrap</h3>
+<ul>
+<li>Acessar Instance via SSH</li>
+<li>Instalar e configurar Docker Community Edition</li>
+<li>Rodar Container de teste</li>
+<li>Parar o container e verificar
+<ul>
+<li>Como seria com Swarm ?</li>
+</ul></li>
+</ul>
+<h3 id="video-05---docker-swarm">Video 05 - Docker Swarm</h3>
+<ul>
+<li>Iniciar Docker Swarm</li>
+<li>Blueprint (excalidraw):
+<ul>
+<li>Docker Swarm</li>
+<li>Stack</li>
+<li>Service</li>
+<li>Replicas</li>
+<li>Network</li>
+<li>Volume</li>
+</ul></li>
+<li>Criar uma página HTML</li>
+<li>Criar uma Stack NGINX com porta publicada</li>
+<li>Teste curl no servidor</li>
+<li>Teste no browser - Failed</li>
+<li>Liberação de portas (8080 e 8081) no EC2 Security Group</li>
+<li>Teste no browser - Success</li>
+<li>Rodar um container puro na porta 8081</li>
+<li>Teste no browser - Success</li>
+<li>Parar o container do Swarm e o Puro</li>
+<li>Testar ambos no browser 1 minuto depois</li>
+<li>Alterar o manifesto para operar com duas réplicas</li>
+<li>Testar no browser</li>
+</ul>
+<h2 id="um-domínio-para-os-serviços">Um domínio para os serviços</h2>
+<h3 id="video-06">Video 06</h3>
+<ul>
+<li>Login com <code>admin</code>
+<ul>
+<li>Adicionar permissão a Policy no IAM
+<ul>
+<li>AIM:route53:full</li>
+</ul></li>
+</ul></li>
+<li>Login com <code>dslab</code>
+<ul>
+<li>Route 53: Criação de Hosted Zone</li>
+</ul></li>
+<li>Registro.BR: Delegação do domínio</li>
+</ul>
+<h3 id="video-07">Video 07</h3>
+<ul>
+<li>Verificação da propagação do domínio Login com <code>admin</code>
+<ul>
+<li>Permissao para <code>Certificate Manager</code> no IAM:</li>
+</ul></li>
+<li>ACM: Geração de certificados SSL/TLS</li>
+</ul>

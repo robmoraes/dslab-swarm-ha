@@ -1,0 +1,7 @@
+services:
+  api:
+    image: robmoraes/dslab-whoami:latest
+    ports:
+      - "8888:8080"
+    deploy:
+      replicas: 1

@@ -1,0 +1,11 @@
+services:
+  api:
+    image: robmoraes/dslab-whoami:latest
+    networks:
+      - appnet
+    deploy:
+      replicas: 1
+
+networks:
+  appnet:
+    driver: overlay

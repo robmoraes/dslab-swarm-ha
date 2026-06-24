@@ -1,0 +1,5 @@
+.env
+artifacts
+blueprints
+*.pem
+.ssh
