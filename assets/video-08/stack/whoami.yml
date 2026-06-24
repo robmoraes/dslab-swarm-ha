@@ -3,9 +3,20 @@ services:
     image: robmoraes/dslab-whoami:latest
     networks:
       - appnet
+      - traefik-public
     deploy:
       replicas: 1
+
+      labels:
+        - traefik.enable=true
+
+        - traefik.http.routers.whoami.rule=Host(`whoami.carlosmoraesrodrigues.dev.br`)
+        - traefik.http.routers.whoami.entrypoints=web
+        - traefik.http.services.whoami.loadbalancer.server.port=8080
 
 networks:
   appnet:
     driver: overlay
+
+  traefik-public:
+    external: true
