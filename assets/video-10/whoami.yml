@@ -1,0 +1,77 @@
+services:
+  api:
+    image: robmoraes/dslab-whoami:latest
+    networks:
+      - appnet
+    deploy:
+      replicas: 5
+      labels:
+        - traefik.enable=false
+
+  waf:
+    image: owasp/modsecurity-crs:nginx
+
+    networks:
+      - appnet
+      - traefik-public
+
+    deploy:
+      replicas: 3
+
+      labels:
+        - traefik.enable=true
+
+        # Domínio atendido por este serviço
+        - traefik.http.routers.whoami-waf.rule=Host(`whoami.carlosmoraesrodrigues.dev.br`)
+
+        # Agora o router escuta em HTTPS
+        - traefik.http.routers.whoami-waf.entrypoints=websecure
+
+        # Habilita TLS
+        - traefik.http.routers.whoami-waf.tls=true
+
+        # Resolver ACME configurado no Traefik
+        - traefik.http.routers.whoami-waf.tls.certresolver=le
+
+        # Porta interna do container modsecurity-crs
+        - traefik.http.services.whoami-waf.loadbalancer.server.port=8080
+
+    environment:
+      # Aplicação protegida pelo WAF.
+      # O ModSecurity encaminhará todas as requisições para este backend.
+      - BACKEND=http://whoami_api:8080
+
+      # Nível de paranoia do OWASP Core Rule Set (CRS).
+      #
+      # 1 = Regras essenciais (recomendado para produção)
+      # 2 = Mais regras de segurança
+      # 3 = Segurança elevada, maior chance de falso positivo
+      # 4 = Máxima proteção, geralmente usada em ambientes muito restritivos
+      #
+      # Para aplicações novas, normalmente começa-se com 1.
+      - PARANOIA=1
+
+      # Pontuação máxima de anomalia permitida para requisições recebidas.
+      #
+      # Quanto menor o valor, mais rigoroso será o bloqueio.
+      #
+      # 5  = Recomendado pelo OWASP CRS
+      # 10 = Mais permissivo
+      #
+      # A maioria dos ataques conhecidos ultrapassa rapidamente esse limite.
+      - ANOMALY_INBOUND=5
+
+      # Pontuação máxima para respostas enviadas pela aplicação.
+      #
+      # Protege contra vazamento de informações, mensagens de erro
+      # excessivamente detalhadas e outros comportamentos inesperados.
+      #
+      # 4 é o valor recomendado pelo OWASP CRS.
+      - ANOMALY_OUTBOUND=4
+
+networks:
+  appnet:
+    driver: overlay
+
+  traefik-public:
+    external: true

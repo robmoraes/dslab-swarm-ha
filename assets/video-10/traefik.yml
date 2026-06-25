@@ -1,0 +1,90 @@
+services:
+  traefik:
+    image: traefik:v3.6.1
+
+    command:
+      # Ativa o provider Docker Swarm
+      - --providers.swarm=true
+
+      # Só publica containers/serviços que tiverem labels explícitas
+      - --providers.swarm.exposedByDefault=false
+
+      # Rede usada pelo Traefik para encontrar os serviços
+      - --providers.swarm.network=traefik-public
+
+      # Porta HTTP usada também pelo HTTP Challenge do Let's Encrypt
+      - --entrypoints.web.address=:80
+
+      # Porta HTTPS para tráfego seguro
+      - --entrypoints.websecure.address=:443
+
+      # Redireciona automaticamente HTTP para HTTPS
+      - --entrypoints.web.http.redirections.entrypoint.to=websecure
+      - --entrypoints.web.http.redirections.entrypoint.scheme=https
+
+      # E-mail usado pelo Let's Encrypt para avisos de expiração/problemas
+      - --certificatesresolvers.le.acme.email=carlos.moraes.as@gmail.com
+
+      # Arquivo onde o Traefik salva certificados emitidos
+      - --certificatesresolvers.le.acme.storage=/letsencrypt/acme.json
+
+      # Usa HTTP Challenge: Let's Encrypt acessa http://dominio/.well-known/acme-challenge/...
+      - --certificatesresolvers.le.acme.httpchallenge=true
+
+      # O challenge será respondido pela entrypoint web, ou seja, porta 80
+      - --certificatesresolvers.le.acme.httpchallenge.entrypoint=web
+
+      # Ativa dashboard interno do Traefik
+      - --api.dashboard=true
+
+    ports:
+      # mode: host faz a porta 80 ser publicada diretamente neste node,
+      # sem passar pelo Routing Mesh do Swarm.
+      # Isso é importante para o HTTP Challenge chegar no Traefik correto.
+      - target: 80
+        published: 80
+        protocol: tcp
+        mode: host
+
+      # Publica HTTPS diretamente neste node também
+      - target: 443
+        published: 443
+        protocol: tcp
+        mode: host
+
+    volumes:
+      # Permite ao Traefik ler serviços, labels e redes do Docker Swarm
+      - /var/run/docker.sock:/var/run/docker.sock:ro
+
+      # Volume persistente para armazenar os certificados
+      - traefik-letsencrypt:/letsencrypt
+
+    networks:
+      # Rede pública compartilhada entre Traefik e os serviços expostos
+      - traefik-public
+
+    deploy:
+      # Com HTTP Challenge + volume local, mantenha apenas 1 réplica
+      replicas: 1
+
+      placement:
+        constraints:
+          # Traefik precisa rodar em manager para ler a API do Swarm
+          - node.role == manager
+
+          # Recomendado: fixar no node que possui o IP público / Elastic IP
+          # - node.hostname == dslab-swarm-manager-01
+
+      restart_policy:
+        condition: any
+
+volumes:
+  # Volume Docker local no node onde o Traefik roda.
+  # Se mudar o Traefik de node, os certificados não acompanham automaticamente.
+  traefik-letsencrypt:
+
+networks:
+  # Crie antes com:
+  # docker network create --driver=overlay --attachable traefik-public
+  traefik-public:
+    external: true

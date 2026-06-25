@@ -103,9 +103,16 @@ containers para conseguir acessar de fora.
 - EC2 SG: abrir porta 80, e derrubar o resto;
 - Traefik: Edge Reverse Proxy para todo tráfego controlar.
 
-### Video 09 Uma Stack, dois Services; API, WAF e Docker Network
+### Video 09 Uma Stack, dois Services; API, WAF
 
-- Blueprint: Dois Services com dependencia na mesma stack. Rede interna e pública.
-- Ajuste na Stack `whoami` incluindo um Service `Web Firewall Application` (WAF).
+- Blueprint: Dois Services com dependencia na mesma stack.
+- Ajuste na Stack `whoami` incluindo um Service `Web Firewall Application`
+  (WAF).
 
-### Video 10 Encerramento dos fundamentos
+### Video 10 Certificado SSL/TLS com Traefik e Let's Encrypt
+
+- EC2 SG: abrir porta 443;
+- Traefik Stack: Configurar para geração de certificado com Let's
+  Encrypt HTTP Challenge;
+
+### Video 10 Encerramento dos Fundamentos
