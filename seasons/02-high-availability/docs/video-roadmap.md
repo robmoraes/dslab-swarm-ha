@@ -6,10 +6,17 @@ falha e prepara o laboratório para a etapa seguinte.
 
 ## Objetivo da temporada
 
-Partir da arquitetura concluída na temporada 1:
+Começar estabelecendo uma identidade própria para o laboratório:
+
+- `dslab.dev.br` como zona DNS pública e autoritativa no Route 53;
+- `swarm.dslab.dev.br` como domínio raiz do cluster;
+- `*.swarm.dslab.dev.br` como padrão para os serviços.
+
+Depois da delegação e da migração do nome, partir da arquitetura concluída na
+temporada 1:
 
 ```text
-Route 53 → EIP → Traefik único com HTTP-01 → WAF → API
+*.swarm.dslab.dev.br → Route 53 → EIP → Traefik único com HTTP-01 → WAF → API
                     │
                     └── manager único
 ```
@@ -18,7 +25,9 @@ E chegar a uma arquitetura tolerante à perda de um manager, de uma instância d
 Traefik ou de um worker:
 
 ```text
-Route 53
+swarm.dslab.dev.br e *.swarm.dslab.dev.br
+    ↓
+Route 53 alias
     ↓
 ALB em múltiplas zonas + certificado ACM
     ↓
@@ -34,16 +43,25 @@ Target Group
 
 | Vídeo | Camada conquistada | Problema que permanece |
 | ---: | --- | --- |
-| 1 | Compreensão do quorum | O cluster ainda possui um único manager |
-| 2 | Control plane com três managers | A entrada continua presa a um Traefik |
-| 3 | Resiliência do Raft comprovada | O site cai quando a borda falha |
-| 4 | Workloads isolados nos workers | Certificados e entrada continuam frágeis |
-| 5 | Traefik replicado e problema isolado | DNS direto não remove falhas rapidamente |
-| 6 | Entrada HA com ALB e ACM | A arquitetura ainda precisa ser provada |
-| 7 | HA validada por falhas controladas | Limites da solução ficam documentados |
+| 1 | Autoridade DNS e nomes canônicos | O cluster ainda possui um único manager |
+| 2 | Compreensão do quorum | O cluster ainda possui um único manager |
+| 3 | Control plane com três managers | A entrada continua presa a um Traefik |
+| 4 | Resiliência do Raft comprovada | O site cai quando a borda falha |
+| 5 | Workloads isolados nos workers | Certificados e entrada continuam frágeis |
+| 6 | Traefik replicado e problema isolado | DNS direto não remove falhas rapidamente |
+| 7 | Entrada HA com ALB e ACM | A arquitetura ainda precisa ser provada |
+| 8 | HA validada por falhas controladas | Limites da solução ficam documentados |
 
 ## Decisões técnicas da temporada
 
+- Criar a public hosted zone `dslab.dev.br` no Route 53 e delegar o domínio
+  registrado no Registro.br para os quatro name servers fornecidos pela AWS.
+- Usar `swarm.dslab.dev.br` como nome estável da entrada do cluster.
+- Usar nomes no formato `<serviço>.swarm.dslab.dev.br` para os serviços.
+- Manter `*.swarm.dslab.dev.br` apontando para o domínio raiz do cluster, para
+  que a troca futura de EIP para ALB aconteça em um único destino.
+- Incluir `swarm.dslab.dev.br` e `*.swarm.dslab.dev.br` no certificado do
+  ACM, pois o wildcard não protege o próprio domínio raiz do cluster.
 - Usar três managers distribuídos entre zonas de disponibilidade.
 - Executar uma instância do Traefik em cada manager.
 - Executar WAF e aplicações somente nos workers.
@@ -57,7 +75,80 @@ Target Group
 - Restaurar completamente o cluster entre dois testes de falha.
 - Nunca publicar tokens, certificados, chaves privadas ou outros segredos.
 
-## Vídeo 1 — Por que precisamos de três managers?
+## Vídeo 1 — Do Registro.br ao Route 53
+
+**Status:** planejado.
+
+**Formato:** fundamentos de DNS seguidos de prática.
+
+**Pergunta central:** como delegar o domínio registrado para o Route 53 e criar
+uma identidade estável para o cluster e seus serviços?
+
+### Convenção de nomes
+
+```text
+dslab.dev.br                         zona pública
+└── swarm.dslab.dev.br               entrada raiz do cluster
+    ├── whoami.swarm.dslab.dev.br    serviço
+    ├── traefik.swarm.dslab.dev.br   serviço
+    └── *.swarm.dslab.dev.br         wildcard para novos serviços
+```
+
+O wildcard DNS organiza a resolução dos serviços, mas não deve ser confundido
+com a cobertura do certificado. Um certificado para
+`*.swarm.dslab.dev.br` não cobre `swarm.dslab.dev.br`; o ACM deverá receber
+os dois nomes mais adiante.
+
+### Roteiro
+
+1. Mostrar o domínio `dslab.dev.br` no Registro.br.
+2. Explicar a diferença entre registrar um domínio e hospedar sua zona DNS.
+3. Criar primeiro uma public hosted zone chamada `dslab.dev.br` no Route 53.
+4. Identificar os quatro name servers atribuídos pela AWS.
+5. Verificar se existe uma configuração DNSSEC ou um registro DS anterior e
+   evitar manter uma cadeia de confiança apontando para chaves antigas.
+6. No Registro.br, substituir os servidores DNS atuais pelos quatro name
+   servers da hosted zone.
+7. Explicar propagação e cache sem prometer ativação instantânea.
+8. Validar a delegação:
+
+   ```bash
+   dig NS dslab.dev.br +short
+   dig SOA dslab.dev.br +short
+   dig +trace dslab.dev.br
+   ```
+
+9. Criar um registro A para `swarm.dslab.dev.br` apontando inicialmente para
+   o EIP do manager existente.
+10. Criar `*.swarm.dslab.dev.br` como CNAME de
+    `swarm.dslab.dev.br`.
+11. Atualizar o router do serviço para
+    `whoami.swarm.dslab.dev.br`.
+12. Emitir o certificado específico necessário nessa fase usando o Traefik
+    único e HTTP-01.
+13. Validar o domínio raiz, o wildcard e o serviço:
+
+    ```bash
+    dig A swarm.dslab.dev.br +short
+    dig whoami.swarm.dslab.dev.br
+    curl -I https://whoami.swarm.dslab.dev.br
+    ```
+
+### Resultado
+
+- Registro.br continua como registrador.
+- Route 53 passa a ser autoritativo por `dslab.dev.br`.
+- O cluster ganha um domínio próprio e independente de nomes pessoais.
+- Serviços passam a seguir um padrão previsível.
+- O wildcard acompanha automaticamente a futura troca do destino raiz para o
+  ALB.
+
+### Gancho
+
+> Já sabemos como os usuários encontrarão o cluster. Agora precisamos entender
+> quantos managers mantêm esse cluster disponível quando uma máquina falha.
+
+## Vídeo 2 — Por que precisamos de três managers?
 
 **Status:** pronto e gravado, aproximadamente 8 minutos.
 
@@ -87,7 +178,7 @@ managers.
 > Agora sabemos por que precisamos de três managers. No próximo vídeo vamos
 > transformar nosso único node em um control plane tolerante a falhas.
 
-## Vídeo 2 — De um manager para um cluster HA
+## Vídeo 3 — De um manager para um cluster HA
 
 **Status:** planejado.
 
@@ -134,7 +225,7 @@ deliberadamente concentrada em um único manager.
 > Temos quorum e réplicas distribuídas. Isso significa que podemos desligar
 > qualquer máquina sem afetar o usuário?
 
-## Vídeo 3 — O cluster sobrevive, mas o site cai
+## Vídeo 4 — O cluster sobrevive, mas o site cai
 
 **Status:** planejado.
 
@@ -183,7 +274,7 @@ HA do control plane comprovada; ausência de HA de ponta a ponta demonstrada.
 > Antes de corrigir a entrada, precisamos separar quem administra o cluster de
 > quem executa nossas aplicações.
 
-## Vídeo 4 — Managers, workers e separação dos workloads
+## Vídeo 5 — Managers, workers e separação dos workloads
 
 **Status:** planejado.
 
@@ -230,7 +321,7 @@ ponto único de falha.
 > Se o Traefik pode ser replicado, por que não simplesmente executar uma
 > instância em cada manager?
 
-## Vídeo 5 — Por que replicar o Traefik ainda não resolve tudo?
+## Vídeo 6 — Por que replicar o Traefik ainda não resolve tudo?
 
 **Status:** planejado.
 
@@ -267,8 +358,8 @@ Traefik tentam administrar a mesma entrada e os mesmos certificados?
 6. Validar cada destino individualmente preservando Host e SNI:
 
    ```bash
-   curl --resolve whoami.example.com:443:IP_DO_MANAGER \
-     https://whoami.example.com
+   curl --resolve whoami.swarm.dslab.dev.br:443:IP_DO_MANAGER \
+     https://whoami.swarm.dslab.dev.br
    ```
 
 7. Realizar requisições pela resolução DNS normal.
@@ -302,7 +393,7 @@ fica isolada.
 > Precisamos colocar uma borda altamente disponível e consciente da saúde dos
 > targets antes do nosso cluster.
 
-## Vídeo 6 — ALB, Target Groups e ACM
+## Vídeo 7 — ALB, Target Groups e ACM
 
 **Status:** planejado.
 
@@ -332,7 +423,12 @@ ALB em múltiplas zonas
 
 ### Roteiro
 
-1. Solicitar o certificado no ACM.
+1. Solicitar no ACM um certificado com os dois nomes:
+   - `swarm.dslab.dev.br`;
+   - `*.swarm.dslab.dev.br`.
+
+   Explicar que o wildcard cobre os serviços, mas não o domínio raiz do
+   cluster.
 2. Validar o domínio por DNS.
 3. Criar o ALB nas zonas que contêm os targets.
 4. Criar um security group público para os listeners do ALB.
@@ -356,7 +452,8 @@ ALB em múltiplas zonas
 13. Manter um router HTTP interno, pois o TLS termina no ALB.
 14. Configurar health checks do Traefik para o serviço realmente exposto, usando
     endpoint leve, intervalo de 30 segundos e timeout entre 3 e 5 segundos.
-15. Alterar o Route 53 para apontar para o ALB.
+15. Trocar o registro A de `swarm.dslab.dev.br` por um Alias para o ALB.
+    Manter o wildcard apontando para esse nome raiz.
 16. Validar a cadeia de encaminhamento:
     - ALB adiciona os headers `X-Forwarded-*`;
     - Traefik confia somente nos proxies e redes previstos;
@@ -381,7 +478,7 @@ ALB em múltiplas zonas
 > Se a implementação ficar longa, este vídeo pode ser dividido em “Desenhando a
 > borda HA” e “Implementando ALB + ACM”, sem alterar a ordem conceitual.
 
-## Vídeo 7 — Chaos Day: agora temos HA de verdade?
+## Vídeo 8 — Chaos Day: agora temos HA de verdade?
 
 **Status:** planejado.
 
@@ -477,6 +574,9 @@ Antes de cada teste de falha:
 
 ## Referências técnicas
 
+- [Alteração de servidores DNS no Registro.br](https://registro.br/ajuda/gerenciamento-de-conta)
+- [Delegação de um domínio externo para o Route 53](https://docs.aws.amazon.com/Route53/latest/DeveloperGuide/dns-configuring-new-domain.html)
+- [Cobertura de certificados wildcard no ACM](https://docs.aws.amazon.com/acm/latest/userguide/acm-certificate-characteristics.html)
 - [Administração e quorum do Docker Swarm](https://docs.docker.com/engine/swarm/admin_guide/)
 - [Managers, workers e disponibilidade dos nodes](https://docs.docker.com/engine/swarm/how-swarm-mode-works/nodes/)
 - [Provider Docker Swarm do Traefik](https://doc.traefik.io/traefik/reference/install-configuration/providers/swarm/)

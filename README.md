@@ -13,7 +13,7 @@ componentes e os testes necessários para alta disponibilidade.
 | Ordem | Temporada | Status | Escopo |
 | --- | --- | --- | --- |
 | 1 | [Construindo a Base](seasons/01-building-the-foundation/) | Concluída e publicada | AWS, EC2, Docker, Swarm, DNS, Traefik, WAF e TLS |
-| 2 | [Alta Disponibilidade](seasons/02-high-availability/) | Em produção | Managers, workers, balanceamento, ALB, ACM e testes de falha |
+| 2 | [Alta Disponibilidade](seasons/02-high-availability/) | Em produção | Delegação DNS, managers, workers, ALB, ACM e testes de falha |
 
 Cada temporada mantém seu próprio índice, documentação e artefatos. O
 [changelog](CHANGELOG.md) registra as versões publicadas e a evolução do

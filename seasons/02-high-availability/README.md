@@ -15,16 +15,21 @@ experimentos, os resultados esperados e os critérios de aceite da temporada.
 
 | Ordem | Vídeo | Status |
 | ---: | --- | --- |
-| 1 | Por que precisamos de três managers? | Pronto — aproximadamente 8 minutos |
-| 2 | De um manager para um cluster HA | Planejado |
-| 3 | O cluster sobrevive, mas o site cai | Planejado |
-| 4 | Managers, workers e separação dos workloads | Planejado |
-| 5 | Por que replicar o Traefik ainda não resolve tudo? | Planejado |
-| 6 | ALB, Target Groups e ACM | Planejado |
-| 7 | Chaos Day: agora temos HA de verdade? | Planejado |
+| 1 | Do Registro.br ao Route 53 | Planejado |
+| 2 | Por que precisamos de três managers? | Pronto — aproximadamente 8 minutos |
+| 3 | De um manager para um cluster HA | Planejado |
+| 4 | O cluster sobrevive, mas o site cai | Planejado |
+| 5 | Managers, workers e separação dos workloads | Planejado |
+| 6 | Por que replicar o Traefik ainda não resolve tudo? | Planejado |
+| 7 | ALB, Target Groups e ACM | Planejado |
+| 8 | Chaos Day: agora temos HA de verdade? | Planejado |
 
 ## Escopo
 
+- Delegar o domínio `dslab.dev.br` do Registro.br para uma public hosted zone
+  no Route 53.
+- Adotar `swarm.dslab.dev.br` como domínio raiz do cluster e
+  `*.swarm.dslab.dev.br` para os serviços.
 - Adicionar nodes managers e workers ao cluster.
 - Explorar quorum, distribuição de réplicas e regras de placement.
 - Demonstrar separadamente a disponibilidade do control plane, dos workloads e
