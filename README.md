@@ -19,16 +19,23 @@ Cada temporada mantém seu próprio índice, documentação e artefatos. O
 [changelog](CHANGELOG.md) registra as versões publicadas e a evolução do
 material.
 
+## Documentação
+
+- [Padrão mínimo de tags para laboratórios AWS](docs/aws-tags.md)
+
 ## Organização
 
 ```text
-seasons/
-├── 01-building-the-foundation/
-│   ├── README.md
-│   ├── assets/
-│   └── docs/
-└── 02-high-availability/
-    ├── README.md
-    └── docs/
-        └── video-roadmap.md
+.
+├── docs/
+│   └── aws-tags.md
+└── seasons/
+    ├── 01-building-the-foundation/
+    │   ├── README.md
+    │   ├── assets/
+    │   └── docs/
+    └── 02-high-availability/
+        ├── README.md
+        └── docs/
+            └── video-roadmap.md
 ```
