@@ -41,16 +41,16 @@ Target Group
 
 ## Fio narrativo
 
-| Vídeo | Camada conquistada | Problema que permanece |
-| ---: | --- | --- |
-| 1 | Autoridade DNS e nomes canônicos | O cluster ainda possui um único manager |
-| 2 | Compreensão do quorum | O cluster ainda possui um único manager |
-| 3 | Control plane com três managers | A entrada continua presa a um Traefik |
-| 4 | Resiliência do Raft comprovada | O site cai quando a borda falha |
-| 5 | Workloads isolados nos workers | Certificados e entrada continuam frágeis |
-| 6 | Traefik replicado e problema isolado | DNS direto não remove falhas rapidamente |
-| 7 | Entrada HA com ALB e ACM | A arquitetura ainda precisa ser provada |
-| 8 | HA validada por falhas controladas | Limites da solução ficam documentados |
+| Vídeo | Camada conquistada                   | Problema que permanece                   |
+| ----: | ------------------------------------ | ---------------------------------------- |
+|     1 | Autoridade DNS e nomes canônicos     | O cluster ainda possui um único manager  |
+|     2 | Compreensão do quorum                | O cluster ainda possui um único manager  |
+|     3 | Control plane com três managers      | A entrada continua presa a um Traefik    |
+|     4 | Resiliência do Raft comprovada       | O site cai quando a borda falha          |
+|     5 | Workloads isolados nos workers       | Certificados e entrada continuam frágeis |
+|     6 | Traefik replicado e problema isolado | DNS direto não remove falhas rapidamente |
+|     7 | Entrada HA com ALB e ACM             | A arquitetura ainda precisa ser provada  |
+|     8 | HA validada por falhas controladas   | Limites da solução ficam documentados    |
 
 ## Decisões técnicas da temporada
 
@@ -429,6 +429,7 @@ ALB em múltiplas zonas
 
    Explicar que o wildcard cobre os serviços, mas não o domínio raiz do
    cluster.
+
 2. Validar o domínio por DNS.
 3. Criar o ALB nas zonas que contêm os targets.
 4. Criar um security group público para os listeners do ALB.
@@ -508,13 +509,13 @@ Acompanhar paralelamente:
 
 ### Matriz de falhas
 
-| Falha | Resultado esperado |
-| --- | --- |
-| Container Traefik | Swarm recria a tarefa e o ALB usa os demais targets |
-| Manager follower | Quorum permanece e o ALB remove o target indisponível |
-| Manager leader | Novo líder é eleito e o tráfego usa os outros Traefiks |
-| Worker | Réplicas restantes continuam atendendo e tarefas são reconciliadas |
-| Réplica do WAF ou API | Balanceamento interno evita enviar tráfego à réplica incapaz |
+| Falha                 | Resultado esperado                                                 |
+| --------------------- | ------------------------------------------------------------------ |
+| Container Traefik     | Swarm recria a tarefa e o ALB usa os demais targets                |
+| Manager follower      | Quorum permanece e o ALB remove o target indisponível              |
+| Manager leader        | Novo líder é eleito e o tráfego usa os outros Traefiks             |
+| Worker                | Réplicas restantes continuam atendendo e tarefas são reconciliadas |
+| Réplica do WAF ou API | Balanceamento interno evita enviar tráfego à réplica incapaz       |
 
 ### Roteiro
 
