@@ -1,0 +1,52 @@
+services:
+  traefik:
+    image: traefik:v3.6.1
+
+    command:
+      # Ativa o provider Docker Swarm
+      - --providers.swarm=true
+
+      # Só publica containers/serviços que tiverem labels explícitas
+      - --providers.swarm.exposedByDefault=false
+
+      # Rede usada pelo Traefik para encontrar os serviços
+      - --providers.swarm.network=traefik-public
+
+      # Entrada HTTP publica em cada manager
+      - --entrypoints.web.address=:80
+
+      # Ativa dashboard interno do Traefik
+      - --api.dashboard=true
+
+    ports:
+      # Publica a porta diretamente em cada manager, sem Routing Mesh.
+      - target: 80
+        published: 80
+        protocol: tcp
+        mode: host
+
+    volumes:
+      # Permite ao Traefik ler serviços, labels e redes do Docker Swarm
+      - /var/run/docker.sock:/var/run/docker.sock:ro
+
+    networks:
+      # Rede pública compartilhada entre Traefik e os serviços expostos
+      - traefik-public
+
+    deploy:
+      # Uma tarefa em cada manager ativo
+      mode: global
+
+      placement:
+        constraints:
+          # Traefik precisa rodar em manager para ler a API do Swarm
+          - node.role == manager
+
+      restart_policy:
+        condition: any
+
+networks:
+  # Crie antes com:
+  # docker network create --driver=overlay --attachable traefik-public
+  traefik-public:
+    external: true

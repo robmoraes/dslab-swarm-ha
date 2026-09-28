@@ -9,6 +9,17 @@ Distributed Systems Lab series.
 
 ## [Unreleased]
 
+### Added
+
+- Added the season 2 workspace and an eight-video roadmap that starts with
+  DNS delegation from Registro.br to Route 53 and evolves the lab through Raft
+  quorum to end-to-end high-availability validation.
+
+### Changed
+
+- Reorganized the published material into season-specific directories and
+  added indexes for the series and each season.
+
 ## [1.0.0] - 2026-09-08
 
 ### Added

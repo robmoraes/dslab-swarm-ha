@@ -1,4 +1,14 @@
-# DSLab | Cluster Docker Swarm on AWS
+# Temporada 1 — Construindo a Base
+
+> Série: Cluster Docker Swarm HA na AWS
+
+**Status:** concluída e publicada.
+
+Esta temporada constrói os fundamentos do laboratório, desde a preparação da
+conta e da instância na AWS até a publicação de uma stack Docker Swarm com DNS,
+WAF e HTTPS.
+
+[Voltar ao índice da série](../../README.md)
 
 ## Video 01 - Intro
 

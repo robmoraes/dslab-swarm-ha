@@ -3,3 +3,4 @@ artifacts
 blueprints
 *.pem
 .ssh
+dist
