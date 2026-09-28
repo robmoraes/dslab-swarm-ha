@@ -41,16 +41,15 @@ Target Group
 
 ## Fio narrativo
 
-| Vídeo | Camada conquistada                   | Problema que permanece                   |
-| ----: | ------------------------------------ | ---------------------------------------- |
-|     1 | Autoridade DNS e nomes canônicos     | O cluster ainda possui um único manager  |
-|     2 | Compreensão do quorum                | O cluster ainda possui um único manager  |
-|     3 | Control plane com três managers      | A entrada continua presa a um Traefik    |
-|     4 | Resiliência do Raft comprovada       | O site cai quando a borda falha          |
-|     5 | Workloads isolados nos workers       | Certificados e entrada continuam frágeis |
-|     6 | Traefik replicado e problema isolado | DNS direto não remove falhas rapidamente |
-|     7 | Entrada HA com ALB e ACM             | A arquitetura ainda precisa ser provada  |
-|     8 | HA validada por falhas controladas   | Limites da solução ficam documentados    |
+| Vídeo | Camada conquistada                  | Problema que permanece                  |
+| ----: | ----------------------------------- | --------------------------------------- |
+|     1 | Autoridade DNS e nomes canônicos    | O cluster ainda possui um único manager |
+|     2 | Compreensão do quorum               | O cluster ainda possui um único manager |
+|     3 | Quorum e Traefik global em HTTP     | DNS sem health checks; HTTPS pendente   |
+|     4 | Workloads isolados nos workers      | A entrada ainda depende de DNS direto   |
+|     5 | Limites dos certificados discutidos | Falta uma borda com TLS e health checks |
+|     6 | Entrada HA com ALB e ACM            | A arquitetura ainda precisa ser provada |
+|     7 | HA validada por falhas controladas  | Limites da solução ficam documentados   |
 
 ## Decisões técnicas da temporada
 
@@ -68,8 +67,9 @@ Target Group
 - Manter os managers ativos para que possam executar o Traefik; não colocá-los
   em `Drain`.
 - Encerrar TLS no ALB quando ACM for introduzido.
-- Remover ACME, `certresolver` e armazenamento de certificados do Traefik
-  depois da migração para ACM.
+- Desativar HTTPS, ACME, `certresolver` e o volume de certificados no experimento
+  HTTP do vídeo 3. Reintroduzir HTTPS público com ALB e ACM, sem devolver a
+  emissão de certificados às réplicas do Traefik.
 - Usar health checks em todas as camadas relevantes.
 - Preservar e validar o IP do cliente até a aplicação.
 - Restaurar completamente o cluster entre dois testes de falha.
@@ -178,14 +178,14 @@ managers.
 > Agora sabemos por que precisamos de três managers. No próximo vídeo vamos
 > transformar nosso único node em um control plane tolerante a falhas.
 
-## Vídeo 3 — De um manager para um cluster HA
+## Vídeo 3 — Três managers: quorum, falhas e entrada via DNS
 
-**Status:** planejado.
+**Status:** gravado, aproximadamente 45 minutos.
 
-**Formato:** prática guiada.
+**Formato:** prática guiada e testes de falha, acompanhados em terminal dividido.
 
 **Pergunta central:** como transformar o laboratório da temporada 1 em um
-cluster com quorum?
+cluster com quorum e descobrir os limites da disponibilidade da entrada?
 
 ### Estado inicial
 
@@ -195,7 +195,22 @@ cluster com quorum?
 - Um Traefik gerenciando certificados por HTTP-01.
 - WAF e API executando no mesmo node.
 
-### Roteiro
+### Acompanhamento em terminal dividido
+
+Manter a mesma visão durante a maior parte da demonstração:
+
+- um painel por manager para acompanhar os containers e seus recursos com
+  `docker stats`;
+- um painel com `docker node ls` para observar `Ready`, `Leader`, `Reachable`
+  e `Unreachable`;
+- um painel externo com `scripts/requests-whoami.sh`, inicialmente em HTTPS e
+  depois em HTTP, mostrando as respostas da API ou `status=unavailable`.
+
+O loop aguarda um segundo depois de cada chamada. Na fase HTTP, os limites de
+conexão e transferência impedem que uma tentativa sem resposta prenda o
+terminal por muito tempo.
+
+### Construção do cluster
 
 1. Revisar a arquitetura herdada da temporada 1.
 2. Apresentar a topologia com três managers em zonas de disponibilidade
@@ -206,7 +221,7 @@ cluster com quorum?
    - TCP 2377 para gerenciamento;
    - TCP e UDP 7946 para descoberta;
    - UDP 4789 para a rede overlay.
-5. Obter o token de manager sem exibi-lo na gravação.
+5. Obter o token de manager.
 6. Adicionar os dois managers ao cluster.
 7. Usar `docker node ls` para identificar `Leader` e `Reachable`.
 8. Distribuir réplicas dos serviços entre os managers e comprovar a distribuição
@@ -215,49 +230,26 @@ cluster com quorum?
 10. Tornar esse posicionamento determinístico com uma label de node e uma
     placement constraint.
 
-### Resultado
-
-O Swarm termina com três managers e quorum, mas a entrada pública permanece
-deliberadamente concentrada em um único manager.
-
-### Gancho
-
-> Temos quorum e réplicas distribuídas. Isso significa que podemos desligar
-> qualquer máquina sem afetar o usuário?
-
-## Vídeo 4 — O cluster sobrevive, mas o site cai
-
-**Status:** planejado.
-
-**Formato:** teste de desastre.
-
-**Pergunta central:** ter quorum torna todo o sistema altamente disponível?
-
-### Preparação da demonstração
-
-Manter simultaneamente:
-
-- um loop externo de requisições com horário, status e node respondente;
-- `docker node ls`;
-- `docker service ls`;
-- `docker service ps` para os serviços principais.
-
-### Roteiro
+### Testes com a entrada única
 
 1. Registrar o estado saudável inicial.
-2. Derrubar um manager que não executa o Traefik.
-3. Observar que o quorum e as requisições permanecem disponíveis.
-4. Restaurar o node e esperar que volte a `Ready` e `Reachable`.
-5. Repetir o teste com o outro manager sem Traefik.
-6. Restaurá-lo e aguardar novamente a convergência do cluster.
-7. Derrubar o manager original, que acumula naquele momento os papéis de líder,
-   EIP e Traefik.
-8. Mostrar dois eventos independentes:
-   - os managers restantes elegem um novo líder e mantêm o Swarm operacional;
-   - as requisições externas param porque o único ponto de entrada desapareceu.
-9. Confirmar que as tarefas continuam executando mesmo sem acesso público.
+2. Derrubar o Traefik único enquanto seu node continua ligado e mostrar a
+   interrupção das requisições externas, sem confundir a queda do proxy com
+   perda de quorum.
+3. Restaurar o Traefik e confirmar que o acesso HTTPS voltou.
+4. Derrubar um manager que não executa o Traefik.
+5. Observar que o quorum e as requisições permanecem disponíveis.
+6. Restaurar o node e esperar que volte a `Ready` e `Reachable`.
+7. Repetir o teste com o outro manager sem Traefik.
+8. Restaurá-lo e aguardar novamente a convergência do cluster.
+9. Derrubar o manager original, que concentra o EIP e o único Traefik. Quando
+   esse manager também é o líder, acompanhar a nova eleição.
+10. Mostrar dois eventos independentes:
+    - os managers restantes elegem um novo líder e mantêm o Swarm operacional;
+    - as requisições externas param porque o único ponto de entrada desapareceu.
+11. Confirmar que as tarefas continuam executando mesmo sem acesso público.
 
-### Mensagem principal
+### Primeira conclusão
 
 > O cluster sobreviveu à perda do líder, mas o serviço público não sobreviveu à
 > perda da borda.
@@ -265,16 +257,50 @@ Manter simultaneamente:
 A indisponibilidade deve ser atribuída ao EIP e ao Traefik únicos, não à eleição
 do Raft.
 
+### Evolução experimental da entrada
+
+1. Restaurar os managers e confirmar novamente o quorum e os serviços.
+2. Desativar HTTPS, o redirecionamento HTTP para HTTPS e ACME no Traefik.
+3. Alterar o router do WAF para o entrypoint HTTP `web`, sem TLS ou
+   `certresolver`, e mudar o loop de requisições para HTTP.
+4. Recriar o serviço Traefik em modo global, restrito aos managers, publicando
+   a porta 80 em `mode: host`. A troca de `replicated` para `global` exige
+   recriar o serviço; o Swarm não permite atualizar o modo do serviço existente.
+5. Configurar o registro A da entrada no Route 53 com os três EIPs dos
+   managers, mantendo o padrão de nomes dos serviços.
+6. Confirmar uma tarefa do Traefik em cada manager e as réplicas de WAF e API
+   distribuídas pelo cluster.
+7. Repetir os testes de falha e acompanhar simultaneamente os containers, o
+   estado dos managers e o loop externo.
+8. Observar o que acontece de fato, incluindo respostas, demora e
+   `status=unavailable`, sem pressupor uma proporção fixa de falhas.
+
+O registro A simples não verifica a saúde dos nodes e continua anunciando um
+EIP indisponível. O cliente pode tentar outro endereço e ainda concluir uma
+chamada; isso não significa que o DNS tenha retirado o destino que falhou.
+
+Na captura de apoio da demonstração, o terminal registra tarefas do Traefik nos
+três nodes, um manager `Unreachable`, outro como `Leader` e chamadas externas
+com `status=unavailable`. Essa composição permite acompanhar lado a lado o
+estado do cluster e o efeito percebido pelo cliente.
+
 ### Resultado
 
-HA do control plane comprovada; ausência de HA de ponta a ponta demonstrada.
+- Três managers com quorum e eleição de líder observados durante as falhas.
+- Diferença entre sobrevivência do cluster e disponibilidade pública
+  demonstrada pela queda do Traefik único e pela queda do manager de entrada.
+- Traefik global e distribuição da entrada pelos três EIPs experimentados em
+  HTTP, sem a complexidade de certificados ACME concorrentes.
+- Limites do DNS direto evidenciados; a entrada ainda não tem remoção ativa de
+  targets indisponíveis e o HTTPS público precisa voltar.
 
 ### Gancho
 
-> Antes de corrigir a entrada, precisamos separar quem administra o cluster de
-> quem executa nossas aplicações.
+> Replicamos a entrada, mas o DNS continua anunciando destinos mesmo quando
+> falham. A próxima camada da evolução precisa saber quais targets estão
+> saudáveis e devolver HTTPS sem certificados concorrentes: ALB e ACM.
 
-## Vídeo 5 — Managers, workers e separação dos workloads
+## Vídeo 4 — Managers, workers e separação dos workloads
 
 **Status:** planejado.
 
@@ -313,19 +339,23 @@ Managers: Raft + API do Swarm + Traefik
 Workers:  WAF + aplicações
 ```
 
-Os workloads estão separados, mas o Traefik e os certificados ainda formam um
-ponto único de falha.
+Os workloads estão separados e o Traefik já está distribuído pelos managers,
+mas a entrada pública ainda depende do DNS direto e permanece em HTTP.
 
 ### Gancho
 
-> Se o Traefik pode ser replicado, por que não simplesmente executar uma
-> instância em cada manager?
+> Replicamos o proxy em HTTP. Como devolver HTTPS sem fazer cada instância
+> disputar a emissão e a renovação dos certificados?
 
-## Vídeo 6 — Por que replicar o Traefik ainda não resolve tudo?
+## Vídeo 5 — Por que replicar o Traefik ainda não resolve tudo?
 
 **Status:** planejado.
 
 **Formato:** retrospectiva técnica e experimento controlado.
+
+O vídeo 3 já incluiu o experimento com Traefik global em HTTP e os três EIPs no
+DNS. Este bloco fica como aprofundamento dos certificados; o experimento TLS
+abaixo é complementar e opcional, não uma repetição necessária daquela etapa.
 
 **Pergunta central:** quais problemas aparecem quando três instâncias do
 Traefik tentam administrar a mesma entrada e os mesmos certificados?
@@ -346,7 +376,7 @@ Traefik tentam administrar a mesma entrada e os mesmos certificados?
    - emissão e renovação ficam previsíveis;
    - o componente permanece como ponto único de falha.
 
-### Experimento controlado
+### Experimento complementar com HTTPS (opcional)
 
 1. Desativar ACME durante o experimento.
 2. Carregar o mesmo certificado estático nas três instâncias do Traefik usando
@@ -393,7 +423,7 @@ fica isolada.
 > Precisamos colocar uma borda altamente disponível e consciente da saúde dos
 > targets antes do nosso cluster.
 
-## Vídeo 7 — ALB, Target Groups e ACM
+## Vídeo 6 — ALB, Target Groups e ACM
 
 **Status:** planejado.
 
@@ -442,9 +472,9 @@ ALB em múltiplas zonas
    timeout de 5 segundos.
 9. Criar o listener HTTP com redirecionamento para HTTPS.
 10. Criar o listener HTTPS usando o certificado do ACM.
-11. Executar o Traefik em modo global, restrito aos managers e com publicação de
-    porta em modo host.
-12. Remover do Traefik:
+11. Confirmar que o Traefik continua em modo global, restrito aos managers e
+    com publicação de porta em modo host, como no experimento do vídeo 3.
+12. Verificar que o Traefik permanece sem os itens retirados na fase HTTP:
     - HTTP-01;
     - `certresolver`;
     - `acme.json`;
@@ -479,7 +509,7 @@ ALB em múltiplas zonas
 > Se a implementação ficar longa, este vídeo pode ser dividido em “Desenhando a
 > borda HA” e “Implementando ALB + ACM”, sem alterar a ordem conceitual.
 
-## Vídeo 8 — Chaos Day: agora temos HA de verdade?
+## Vídeo 7 — Chaos Day: agora temos HA de verdade?
 
 **Status:** planejado.
 

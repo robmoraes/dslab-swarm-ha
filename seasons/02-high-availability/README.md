@@ -17,12 +17,15 @@ experimentos, os resultados esperados e os critérios de aceite da temporada.
 | ---: | --- | --- |
 | 1 | Do Registro.br ao Route 53 | Planejado |
 | 2 | Por que precisamos de três managers? | Pronto — aproximadamente 8 minutos |
-| 3 | De um manager para um cluster HA | Planejado |
-| 4 | O cluster sobrevive, mas o site cai | Planejado |
-| 5 | Managers, workers e separação dos workloads | Planejado |
-| 6 | Por que replicar o Traefik ainda não resolve tudo? | Planejado |
-| 7 | ALB, Target Groups e ACM | Planejado |
-| 8 | Chaos Day: agora temos HA de verdade? | Planejado |
+| 3 | Três managers: quorum, falhas e entrada via DNS | Gravado — aproximadamente 45 minutos |
+| 4 | Managers, workers e separação dos workloads | Planejado |
+| 5 | Por que replicar o Traefik ainda não resolve tudo? | Planejado — aprofundamento de certificados |
+| 6 | ALB, Target Groups e ACM | Planejado |
+| 7 | Chaos Day: agora temos HA de verdade? | Planejado |
+
+O episódio 3 reúne os antigos roteiros dos vídeos 3 e 4. A gravação também
+inclui a transição para Traefik global em HTTP e o registro A com os três EIPs,
+evidenciando os limites do DNS direto e preparando o gancho para ALB e ACM.
 
 ## Escopo
 
