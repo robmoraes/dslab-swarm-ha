@@ -19,8 +19,8 @@ experimentos, os resultados esperados e os critérios de aceite da temporada.
 | 2 | Por que precisamos de três managers? | Pronto — aproximadamente 8 minutos |
 | 3 | Três managers: quorum, falhas e entrada via DNS | Gravado — aproximadamente 45 minutos |
 | 4 | Managers, workers e separação dos workloads | Planejado |
-| 5 | Por que replicar o Traefik ainda não resolve tudo? | Planejado — aprofundamento de certificados |
-| 6 | ALB, Target Groups e ACM | Planejado |
+| 5 | Certificados no Swarm e configuração do ACM | Planejado: cenários no Excalidraw e prática no ACM |
+| 6 | ALB e Target Groups: publicando HTTPS | Planejado |
 | 7 | Chaos Day: agora temos HA de verdade? | Planejado |
 
 O episódio 3 reúne os antigos roteiros dos vídeos 3 e 4. A gravação também
@@ -30,6 +30,12 @@ evidenciando os limites do DNS direto e preparando o gancho para ALB e ACM.
 Para preparar os workers do episódio 4, consulte o
 [guia de provisionamento EC2](../../provisioning/workers/ec2.md) e o
 [script de bootstrap](../../scripts/bootstrap-worker.sh).
+
+O episódio 5 compara DNS-01, HTTP-01 e Traefik único, apresenta a arquitetura
+com ACM + ALB + Target Group e termina com o certificado emitido no ACM.
+Os [quatro desenhos editáveis do Excalidraw](../../docs/excalidraw/s02e05/README.md)
+acompanham a explicação. A associação do certificado ao ALB e a publicação
+de HTTPS ficam para o episódio 6.
 
 ## Escopo
 

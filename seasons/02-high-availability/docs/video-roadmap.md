@@ -47,7 +47,7 @@ Target Group
 |     2 | Compreensão do quorum               | O cluster ainda possui um único manager |
 |     3 | Quorum e Traefik global em HTTP     | DNS sem health checks; HTTPS pendente   |
 |     4 | Workloads isolados nos workers      | A entrada ainda depende de DNS direto   |
-|     5 | Limites dos certificados discutidos | Falta uma borda com TLS e health checks |
+|     5 | Certificado emitido no ACM          | Falta associá-lo ao ALB e publicar HTTPS |
 |     6 | Entrada HA com ALB e ACM            | A arquitetura ainda precisa ser provada |
 |     7 | HA validada por falhas controladas  | Limites da solução ficam documentados   |
 
@@ -64,9 +64,10 @@ Target Group
 - Usar três managers distribuídos entre zonas de disponibilidade.
 - Executar uma instância do Traefik em cada manager.
 - Executar WAF e aplicações somente nos workers.
-- Manter os managers ativos para que possam executar o Traefik; não colocá-los
-  em `Drain`.
-- Encerrar TLS no ALB quando ACM for introduzido.
+- Manter os managers em `Active` na operação normal para que possam executar
+  o Traefik.
+- Emitir o certificado no ACM no vídeo 5 e encerrar TLS no ALB no vídeo 6,
+  quando o certificado for associado ao listener HTTPS.
 - Desativar HTTPS, ACME, `certresolver` e o volume de certificados no experimento
   HTTP do vídeo 3. Reintroduzir HTTPS público com ALB e ACM, sem devolver a
   emissão de certificados às réplicas do Traefik.
@@ -351,16 +352,16 @@ global e verificando o caminho da requisição durante a migração?
 Provisionar as três instâncias pelo
 [guia dos workers EC2](../../../provisioning/workers/ec2.md):
 
-| Item | Configuração |
-| --- | --- |
-| Quantidade e zonas | Três workers, um por zona: `us-east-1a`, `us-east-1b` e `us-east-1c` |
-| Sistema e arquitetura | Ubuntu Server 26.04 LTS, `x86_64` |
-| AMI em `us-east-1` | `ami-0b6d9d3d33ba97d99`, da Canonical (`099720109477`) |
-| Tipo e compra | `t3.small`, 2 vCPUs e 2 GiB de RAM, On-Demand |
-| Disco | 30 GiB gp3, com exclusão ao encerrar a instância |
-| Rede | VPC e subnets existentes; security group `DSLab Swarm SG` |
-| Acesso | Importar `.ssh/swarm.dslab.pub` como `dslab-swarm-current`; habilitar IPv4 público automático |
-| Metadados | IMDS habilitado, V2 only e response hop limit `2` |
+| Item                  | Configuração                                                                                  |
+| --------------------- | --------------------------------------------------------------------------------------------- |
+| Quantidade e zonas    | Três workers, um por zona: `us-east-1a`, `us-east-1b` e `us-east-1c`                          |
+| Sistema e arquitetura | Ubuntu Server 26.04 LTS, `x86_64`                                                             |
+| AMI em `us-east-1`    | `ami-0b6d9d3d33ba97d99`, da Canonical (`099720109477`)                                        |
+| Tipo e compra         | `t3.small`, 2 vCPUs e 2 GiB de RAM, On-Demand                                                 |
+| Disco                 | 30 GiB gp3, com exclusão ao encerrar a instância                                              |
+| Rede                  | VPC e subnets existentes; security group `DSLab Swarm SG`                                     |
+| Acesso                | Importar `.ssh/swarm.dslab.pub` como `dslab-swarm-current`; habilitar IPv4 público automático |
+| Metadados             | IMDS habilitado, V2 only e response hop limit `2`                                             |
 
 Usar o [bootstrap do worker](../../../scripts/bootstrap-worker.sh) para
 instalar o Docker em cada EC2. O guia inclui os comandos de SSH, a entrada com
@@ -387,11 +388,11 @@ comunicação do cluster; os workers não recebem EIP nem registro no DNS públi
 5. Confirmar que `stacks/traefik.yml` mantém `mode: global` e
    `node.role == manager`. Não colocar os managers em `Drain`.
 6. Aplicar a stack atualizada com `docker stack deploy -c stacks/whoami.yml
-   --detach=false whoami`. A mudança das constraints atualiza os serviços e
+--detach=false whoami`. A mudança das constraints atualiza os serviços e
    move suas tarefas para os workers; acompanhar a convergência sem prometer
    zero requisições perdidas durante a atualização.
 7. Verificar `docker service ps traefik_traefik`, `docker service ps
-   whoami_waf` e `docker service ps whoami_api`: Traefik nos três managers,
+whoami_waf` e `docker service ps whoami_api`: Traefik nos três managers,
    todas as tarefas atuais do WAF e da API nos workers. Confirmar as contagens
    `3/3` e `5/5` em `docker service ls` e acompanhar o loop externo.
 8. Colocar temporariamente um worker em `Drain` e observar as tarefas da API
@@ -421,90 +422,125 @@ nem o HTTPS público.
 > Replicamos o proxy em HTTP. Como devolver HTTPS sem fazer cada instância
 > disputar a emissão e a renovação dos certificados?
 
-## Vídeo 5 — Por que replicar o Traefik ainda não resolve tudo?
+## Vídeo 5 — Certificados no Swarm e configuração do ACM
 
 **Status:** planejado.
 
-**Formato:** retrospectiva técnica e experimento controlado.
+**Formato:** explicação objetiva no Excalidraw seguida de configuração do ACM
+no console da AWS.
 
-O vídeo 3 já incluiu o experimento com Traefik global em HTTP e os três EIPs no
-DNS. Este bloco fica como aprofundamento dos certificados; o experimento TLS
-abaixo é complementar e opcional, não uma repetição necessária daquela etapa.
+**Material visual:** [quatro cenários editáveis](../../../docs/excalidraw/s02e05/README.md),
+na ordem DNS-01, HTTP-01, Traefik único e ACM + ALB + Target Group.
 
-**Pergunta central:** quais problemas aparecem quando três instâncias do
-Traefik tentam administrar a mesma entrada e os mesmos certificados?
+**Pergunta central:** como tirar a gestão dos certificados das réplicas do
+Traefik e preparar o retorno do HTTPS?
 
-### Histórico das tentativas
+**Entrega do episódio:** certificado público emitido no ACM, validado por DNS
+e pronto para o ALB. Criar ALB, Target Group, listeners e publicar HTTPS fica
+para o vídeo 6. Não alterar stacks, script de requisições, registros de
+tráfego, SGs ou IPs públicos neste episódio.
 
-1. **DNS-01 com Route 53 em cada Traefik**
-   - cada instância dispara sua própria emissão ou renovação;
-   - surgem emissões duplicadas;
-   - os limites da autoridade certificadora são consumidos;
-   - o domínio pode sofrer bloqueio temporário por rate limit.
-2. **HTTP-01 com o arquivo ACME em EFS**
-   - o arquivo passa a ser compartilhado;
-   - o filesystem compartilhado não fornece a coordenação exigida entre os
-     processos;
-   - gravações concorrentes e renovação continuam sendo riscos.
-3. **Traefik único**
-   - emissão e renovação ficam previsíveis;
-   - o componente permanece como ponto único de falha.
+### Ponto de partida e abertura
 
-### Experimento complementar com HTTPS (opcional)
+- Três managers, cada um com uma tarefa do Traefik global em HTTP na porta 80,
+  publicada em modo `host`.
+- WAF e API nos workers, conforme a separação do vídeo 4.
+- Registro A do Route 53 com os três EIPs dos managers.
 
-1. Desativar ACME durante o experimento.
-2. Carregar o mesmo certificado estático nas três instâncias do Traefik usando
-   secrets e configuração dinâmica.
-3. Nunca armazenar a chave privada no repositório.
-4. Executar um Traefik em cada manager.
-5. Associar um endereço público a cada manager e configurar os endereços no
-   Route 53.
-6. Validar cada destino individualmente preservando Host e SNI:
+> No vídeo 3 colocamos o Traefik em modo global e retiramos o HTTPS. Agora
+> precisamos devolver o certificado sem fazer cada réplica cuidar dessa
+> responsabilidade. Vamos comparar as opções e já emitir nosso certificado
+> no ACM.
 
-   ```bash
-   curl --resolve whoami.swarm.dslab.dev.br:443:IP_DO_MANAGER \
-     https://whoami.swarm.dslab.dev.br
+### Excalidraw: quatro cenários
+
+1. **DNS-01 com três Traefiks:** cada instância pode validar o domínio por
+   TXT no Route 53, independentemente do destino HTTP. Isso funciona, mas
+   não coordena os três processos ACME: emissões e renovações independentes
+   podem se repetir e consumir limites da autoridade certificadora.
+2. **HTTP-01 com três Traefiks:** o desafio criado por uma instância precisa
+   estar acessível em qualquer entrada usada pela validação. A CA consulta
+   o domínio e pode chegar a outra réplica, sem aquele desafio. O IP de origem
+   do pedido de emissão não fixa o destino da validação.
+3. **Um Traefik:** emissão, renovação e estado ACME ficam em uma instância.
+   Simplifica o certificado, mas a entrada fica indisponível se esse Traefik
+   falhar, até sua recuperação.
+4. **ACM + ALB + Target Group:** certificado gerenciado no ACM, TLS encerrado
+   no ALB e três Traefiks atendendo HTTP por IPs privados. O Target Group
+   organiza os destinos e seus health checks. Essa é a arquitetura de destino;
+   neste vídeo configuramos apenas o ACM.
+
+Existem soluções de emissão centralizada e distribuição de certificados sem
+ACM. A escolha do laboratório é a integração gerenciada com o ALB, retirando
+essa responsabilidade dos Traefiks e preparando o isolamento do cluster.
+
+O certificado protege o trecho cliente-ALB, não o HTTP interno. Restringir a
+porta dos managers ao SG do ALB será parte do vídeo 6; retirar IPs públicos e
+migrar os nodes para subnets privadas é uma evolução posterior, não um efeito
+automático de criar o ALB.
+
+### Prática: solicitar e validar o certificado no ACM
+
+1. Abrir **AWS Certificate Manager** na região **N. Virginia (`us-east-1`)**,
+   a mesma região em que o ALB será criado. O certificado precisa estar na
+   região do load balancer.
+2. Selecionar **Request a certificate** e **Request a public certificate**.
+3. Adicionar os dois nomes:
+
+   ```text
+   swarm.dslab.dev.br
+   *.swarm.dslab.dev.br
    ```
 
-7. Realizar requisições pela resolução DNS normal.
-8. Derrubar uma instância do Traefik.
-9. Demonstrar que:
-   - o certificado continua válido nos outros targets;
-   - duas instâncias continuam saudáveis;
-   - uma parcela dos clientes ainda tenta ou mantém em cache o IP indisponível.
+   O wildcard cobre serviços como `whoami.swarm.dslab.dev.br`, mas não o
+   próprio `swarm.dslab.dev.br` nem subdomínios com mais níveis.
 
-Não prometer exatamente um terço de falhas. Route 53 retorna endereços, mas a
-escolha, a reutilização e o cache também dependem do resolver e do cliente.
+4. Escolher **DNS validation**, algoritmo **RSA 2048** e manter a exportação
+   desabilitada. O certificado será usado pela integração com o ALB, sem
+   exportar ou instalar chaves nos nodes.
+5. Aplicar o [padrão de tags do laboratório](../../../docs/aws-tags.md):
 
-### Requisitos extraídos do problema
+   | Tag | Valor |
+   | --- | --- |
+   | `Name` | `swarm-ha-public-certificate` |
+   | `dslab:lab-id` | `swarm-ha` |
+   | `dslab:owner` | `dslab` |
 
-A solução final precisa oferecer:
+6. Solicitar o certificado e abrir seus detalhes. Mostrar o estado inicial
+   **Pending validation** e a seção **Domains**.
+7. Usar **Create records in Route 53** e criar os CNAMEs de validação na hosted
+   zone pública `dslab.dev.br`. Se a opção não estiver disponível, cadastrar
+   manualmente no Route 53 os nomes e valores CNAME fornecidos pelo ACM.
+   O domínio base e o wildcard podem compartilhar o mesmo registro de
+   validação; não criar duplicatas conflitantes.
+8. Mostrar a diferença: aqui o ACM valida com **CNAME**, não com o TXT do
+   desafio ACME DNS-01. Não substituir o registro A com os três EIPs nem o
+   wildcard que encaminha os serviços para o domínio raiz.
+9. Aguardar a validação e conferir **Issued**. A atualização pode levar
+   alguns minutos; cortar a espera na edição, sem prometer emissão imediata.
+10. Manter os CNAMEs no DNS público. A renovação gerenciada depende desses
+    registros e do certificado em uso num serviço integrado, o que acontecerá
+    ao associá-lo ao ALB no vídeo 6.
 
-- um endpoint público estável;
-- balanceamento ativo;
-- remoção automática de targets indisponíveis;
-- certificado independente das réplicas do Traefik;
-- Traefik sem estado ACME compartilhado;
-- preservação segura do IP do cliente.
+### Resultado e encerramento
 
-### Resultado
+- Certificado **Issued** em `us-east-1`, cobrindo os dois nomes.
+- Registros de validação preservados no Route 53.
+- Certificado ainda sem associação ao ALB; a aplicação continua em HTTP.
 
-Os certificados deixam de ser a variável do teste e a limitação do DNS direto
-fica isolada.
+> Nosso certificado está emitido e pronto para uso. No próximo vídeo vamos
+> criar o ALB e o Target Group, associar esse certificado ao listener HTTPS
+> e trocar a entrada pública do cluster.
 
-### Gancho
-
-> Precisamos colocar uma borda altamente disponível e consciente da saúde dos
-> targets antes do nosso cluster.
-
-## Vídeo 6 — ALB, Target Groups e ACM
+## Vídeo 6 — ALB e Target Groups: publicando HTTPS
 
 **Status:** planejado.
 
-**Formato:** arquitetura seguida de implementação.
+**Formato:** implementação da arquitetura apresentada no vídeo 5, usando o
+certificado já emitido no ACM.
 
-**Pergunta central:** como remover da aplicação a responsabilidade por
-certificados e failover da borda?
+**Pergunta central:** como publicar HTTPS no ALB e encaminhar as requisições
+para os Traefiks sem expor diretamente suas portas à Internet?
 
 ### Arquitetura desejada
 
@@ -527,49 +563,46 @@ ALB em múltiplas zonas
 
 ### Roteiro
 
-1. Solicitar no ACM um certificado com os dois nomes:
-   - `swarm.dslab.dev.br`;
-   - `*.swarm.dslab.dev.br`.
-
-   Explicar que o wildcard cobre os serviços, mas não o domínio raiz do
-   cluster.
-
-2. Validar o domínio por DNS.
-3. Criar o ALB nas zonas que contêm os targets.
-4. Criar um security group público para os listeners do ALB.
-5. Permitir que os managers recebam tráfego na porta do Traefik somente a partir
+1. Conferir o certificado do vídeo 5: estado `Issued`, nomes
+   `swarm.dslab.dev.br` e `*.swarm.dslab.dev.br`, na região `us-east-1`.
+   Não emitir outro certificado; manter os CNAMEs de validação no Route 53.
+2. Criar o ALB nas zonas que contêm os targets.
+3. Criar um security group público para os listeners do ALB.
+4. Permitir que os managers recebam tráfego na porta do Traefik somente a partir
    do security group do ALB.
-6. Criar o Target Group com os três managers.
-7. Criar um endpoint ou router dedicado ao health check que não dependa do
+5. Criar o Target Group HTTP na porta 80 e registrar os três managers.
+   Com EC2 provisionadas manualmente, novos managers também precisam ser
+   registrados; o ALB não descobre a composição do Swarm automaticamente.
+6. Criar um endpoint ou router dedicado ao health check que não dependa do
    `Host` público enviado pelo cliente.
-8. Configurar health check do Target Group com intervalo de 30 segundos e
+7. Configurar health check do Target Group com intervalo de 30 segundos e
    timeout de 5 segundos.
-9. Criar o listener HTTP com redirecionamento para HTTPS.
-10. Criar o listener HTTPS usando o certificado do ACM.
-11. Confirmar que o Traefik continua em modo global, restrito aos managers e
+8. Criar o listener HTTP com redirecionamento para HTTPS.
+9. Criar o listener HTTPS usando o certificado emitido no vídeo 5.
+10. Confirmar que o Traefik continua em modo global, restrito aos managers e
     com publicação de porta em modo host, como no experimento do vídeo 3.
-12. Verificar que o Traefik permanece sem os itens retirados na fase HTTP:
+11. Verificar que o Traefik permanece sem os itens retirados na fase HTTP:
     - HTTP-01;
     - `certresolver`;
     - `acme.json`;
     - volume de certificados;
     - router HTTPS interno que deixou de existir.
-13. Manter um router HTTP interno, pois o TLS termina no ALB.
-14. Configurar health checks do Traefik para o serviço realmente exposto, usando
+12. Manter um router HTTP interno, pois o TLS termina no ALB.
+13. Configurar health checks do Traefik para o serviço realmente exposto, usando
     endpoint leve, intervalo de 30 segundos e timeout entre 3 e 5 segundos.
-15. Trocar o registro A de `swarm.dslab.dev.br` por um Alias para o ALB.
+14. Trocar o registro A de `swarm.dslab.dev.br` por um Alias para o ALB.
     Manter o wildcard apontando para esse nome raiz.
-16. Validar a cadeia de encaminhamento:
+15. Validar a cadeia de encaminhamento:
     - ALB adiciona os headers `X-Forwarded-*`;
     - Traefik confia somente nos proxies e redes previstos;
     - WAF propaga os headers;
     - aplicação interpreta e exibe o IP correto do cliente.
-17. Garantir que comunicações entre stacks usem nomes Swarm qualificados no
+16. Garantir que comunicações entre stacks usem nomes Swarm qualificados no
     formato `<stack>_<serviço>`.
 
 ### Resultado
 
-- Certificado gerenciado pelo ACM.
+- Certificado do ACM associado ao listener HTTPS e em uso no ALB.
 - Três instâncias stateless do Traefik em relação ao TLS público.
 - ALB removendo targets incapazes de receber tráfego.
 - Managers sem exposição pública direta da porta da aplicação.
@@ -581,7 +614,7 @@ ALB em múltiplas zonas
 > sobrevive às falhas que derrubavam o laboratório anterior.
 
 > Se a implementação ficar longa, este vídeo pode ser dividido em “Desenhando a
-> borda HA” e “Implementando ALB + ACM”, sem alterar a ordem conceitual.
+> borda HA” e “Implementando ALB + Target Groups”, sem alterar a ordem conceitual.
 
 ## Vídeo 7 — Chaos Day: agora temos HA de verdade?
 
@@ -689,5 +722,12 @@ Antes de cada teste de falha:
 - [Desafios ACME do Let's Encrypt](https://letsencrypt.org/docs/challenge-types/)
 - [Simple routing do Route 53](https://docs.aws.amazon.com/Route53/latest/DeveloperGuide/routing-policy-simple.html)
 - [Health checks de Target Groups do ALB](https://docs.aws.amazon.com/elasticloadbalancing/latest/application/target-group-health-checks.html)
+- [Registro de targets no ALB](https://docs.aws.amazon.com/elasticloadbalancing/latest/application/target-group-register-targets.html)
 - [Certificados HTTPS no ALB](https://docs.aws.amazon.com/elasticloadbalancing/latest/application/https-listener-certificates.html)
+- [Solicitação de certificado público no ACM](https://docs.aws.amazon.com/acm/latest/userguide/acm-public-certificates.html)
+- [Validação DNS de certificados no ACM](https://docs.aws.amazon.com/acm/latest/userguide/dns-validation.html)
+- [Região do certificado e integração com serviços AWS](https://aws.amazon.com/certificate-manager/faqs/)
+- [Renovação do ACM com validação DNS](https://docs.aws.amazon.com/acm/latest/userguide/dns-renewal-validation.html)
+- [IPs privados e segurança dos targets do ELB](https://docs.aws.amazon.com/elasticloadbalancing/latest/userguide/infrastructure-security.html)
+- [Security groups do ALB e dos targets](https://docs.aws.amazon.com/elasticloadbalancing/latest/application/load-balancer-update-security-groups.html)
 - [Headers encaminhados pelo ALB](https://docs.aws.amazon.com/elasticloadbalancing/latest/application/x-forwarded-headers.html)
