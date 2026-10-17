@@ -306,31 +306,103 @@ estado do cluster e o efeito percebido pelo cliente.
 
 **Formato:** teoria curta seguida de prática.
 
-**Pergunta central:** quais responsabilidades pertencem aos managers e quais
-pertencem aos workers?
+**Pergunta central:** como tirar WAF e API dos managers mantendo o Traefik
+global e verificando o caminho da requisição durante a migração?
+
+### Ponto de partida
+
+- Três managers com quorum; cada um executa uma tarefa do Traefik em HTTP.
+- Route 53 anuncia os três EIPs dos managers, sem health checks.
+- WAF com três réplicas e API com cinco, ainda elegíveis para executar nos
+  managers.
+- O loop externo de requisições mostra o serviço antes, durante e depois da
+  migração. Não alterar DNS ou reintroduzir HTTPS neste vídeo.
 
 ### Conteúdo conceitual
 
-- Managers participam do Raft, armazenam o estado e fazem a orquestração.
-- Workers executam as tarefas dos serviços.
-- Managers também recebem tarefas por padrão.
-- O Traefik permanece nos managers porque consulta a API do Swarm disponível
-  nesses nodes.
-- Separar workloads de aplicação não significa colocar os managers em
-  `Drain`.
+- Managers mantêm o estado via Raft, agendam serviços e expõem a API do Swarm;
+  também executam tarefas por padrão. Workers executam tarefas, mas não votam
+  no quorum nem administram o cluster.
+- O Traefik continua nos managers para consultar a API do Swarm pelo socket
+  local. WAF e API podem executar nos workers e conversar com ele pelas redes
+  overlay existentes.
+- A separação é uma regra de placement dos serviços, não uma mudança de papel
+  dos managers. Colocar um manager em `Drain` retiraria também seu Traefik
+  global; os três managers devem permanecer `Active`.
+- `node.role == worker` limita onde a tarefa pode executar, mas não garante
+  uma réplica por worker nem uma por zona de disponibilidade. Mostrar a
+  distribuição observada, sem tratá-la como garantia automática.
+
+### Preparação
+
+1. Registrar `docker node ls`, `docker service ls` e o posicionamento atual de
+   `traefik_traefik`, `whoami_waf` e `whoami_api` com
+   `docker service ps <servico>`.
+2. Iniciar `scripts/requests-whoami.sh` em um terminal externo para comparar
+   as respostas durante a transição. O DNS direto ainda pode produzir falhas
+   independentes da migração dos workloads.
+3. Revisar as três zonas de disponibilidade e o security group existente. Os
+   workers precisam falar com os managers pelo IP privado na porta TCP 2377 e
+   entre si e com os managers em TCP/UDP 7946 e UDP 4789. Não publicar essas
+   portas para a Internet.
+
+### Configuração dos workers
+
+Provisionar as três instâncias pelo
+[guia dos workers EC2](../../../provisioning/workers/ec2.md):
+
+| Item | Configuração |
+| --- | --- |
+| Quantidade e zonas | Três workers, um por zona: `us-east-1a`, `us-east-1b` e `us-east-1c` |
+| Sistema e arquitetura | Ubuntu Server 26.04 LTS, `x86_64` |
+| AMI em `us-east-1` | `ami-0b6d9d3d33ba97d99`, da Canonical (`099720109477`) |
+| Tipo e compra | `t3.small`, 2 vCPUs e 2 GiB de RAM, On-Demand |
+| Disco | 30 GiB gp3, com exclusão ao encerrar a instância |
+| Rede | VPC e subnets existentes; security group `DSLab Swarm SG` |
+| Acesso | Importar `.ssh/swarm.dslab.pub` como `dslab-swarm-current`; habilitar IPv4 público automático |
+| Metadados | IMDS habilitado, V2 only e response hop limit `2` |
+
+Usar o [bootstrap do worker](../../../scripts/bootstrap-worker.sh) para
+instalar o Docker em cada EC2. O guia inclui os comandos de SSH, a entrada com
+o token de worker e a conferência dos nodes. Os IPs privados são usados na
+comunicação do cluster; os workers não recebem EIP nem registro no DNS público.
 
 ### Roteiro prático
 
-1. Criar três workers distribuídos entre as zonas de disponibilidade.
-2. Adicioná-los com o token de worker, sem expor o token.
-3. Identificar claramente os dois grupos em `docker node ls`.
-4. Aplicar placement constraints para que API e WAF executem somente em
-   `node.role == worker`.
-5. Manter o Traefik restrito a `node.role == manager`.
-6. Redistribuir as réplicas e mostrar o resultado com `docker service ps`.
-7. Explicar que os managers executam o control plane e o serviço de plataforma
-   responsável pela entrada, enquanto os workloads da aplicação ficam nos
-   workers.
+1. Criar as três EC2 workers conforme a configuração acima e o guia de
+   provisionamento. Garantir conectividade de saída para instalar o Docker e
+   baixar as imagens.
+2. Executar o bootstrap do worker. Obter no manager o comando de
+   entrada com `docker swarm join-token worker` e executá-lo nos novos nodes,
+   usando o IP privado de um manager. Não exibir o token na gravação nem
+   confundi-lo com o token de manager.
+3. Confirmar seis nodes `Ready` e `Active` com `docker node ls`: três managers
+   (`Leader`/`Reachable`) e três workers (sem `MANAGER STATUS`). A entrada dos
+   workers, por si só, não deve ser apresentada como redistribuição imediata
+   das tarefas existentes.
+4. Editar `stacks/whoami.yml` durante a gravação: adicionar a constraint
+   `node.role == worker` em `deploy.placement.constraints` tanto para `api`
+   quanto para `waf`. Manter as cinco e três réplicas e as redes `appnet` e
+   `traefik-public` como estão.
+5. Confirmar que `stacks/traefik.yml` mantém `mode: global` e
+   `node.role == manager`. Não colocar os managers em `Drain`.
+6. Aplicar a stack atualizada com `docker stack deploy -c stacks/whoami.yml
+   --detach=false whoami`. A mudança das constraints atualiza os serviços e
+   move suas tarefas para os workers; acompanhar a convergência sem prometer
+   zero requisições perdidas durante a atualização.
+7. Verificar `docker service ps traefik_traefik`, `docker service ps
+   whoami_waf` e `docker service ps whoami_api`: Traefik nos três managers,
+   todas as tarefas atuais do WAF e da API nos workers. Confirmar as contagens
+   `3/3` e `5/5` em `docker service ls` e acompanhar o loop externo.
+8. Colocar temporariamente um worker em `Drain` e observar as tarefas da API
+   e do WAF serem reagendadas nos outros workers, nunca nos managers. Voltar
+   esse worker para `Active` e esperar a recuperação antes de encerrar. O
+   Swarm não precisa redistribuir de volta as tarefas só porque o node voltou.
+
+Se alguma tarefa ficar `Pending` ou falhar ao iniciar, examinar
+`docker service ps --no-trunc <servico>` antes de atribuir o problema ao placement:
+capacidade dos workers, acesso ao registry e comunicação overlay também entram
+no caminho.
 
 ### Resultado
 
@@ -339,8 +411,10 @@ Managers: Raft + API do Swarm + Traefik
 Workers:  WAF + aplicações
 ```
 
-Os workloads estão separados e o Traefik já está distribuído pelos managers,
-mas a entrada pública ainda depende do DNS direto e permanece em HTTP.
+Os workloads estão separados e o Traefik continua distribuído pelos managers.
+Isso protege o control plane da carga da aplicação, mas não resolve sozinho a
+distribuição das réplicas entre zonas, a saúde dos destinos anunciados no DNS
+nem o HTTPS público.
 
 ### Gancho
 

@@ -27,6 +27,10 @@ O episódio 3 reúne os antigos roteiros dos vídeos 3 e 4. A gravação também
 inclui a transição para Traefik global em HTTP e o registro A com os três EIPs,
 evidenciando os limites do DNS direto e preparando o gancho para ALB e ACM.
 
+Para preparar os workers do episódio 4, consulte o
+[guia de provisionamento EC2](../../provisioning/workers/ec2.md) e o
+[script de bootstrap](../../scripts/bootstrap-worker.sh).
+
 ## Escopo
 
 - Delegar o domínio `dslab.dev.br` do Registro.br para uma public hosted zone
