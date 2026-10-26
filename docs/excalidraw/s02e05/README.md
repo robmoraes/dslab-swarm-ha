@@ -19,18 +19,26 @@ temporada, `s02.excalidraw`, foi preservado.
 
 ## Sequência da gravação
 
-1. Relembrar que o laboratório passou a usar Traefik global em HTTP no vídeo 3.
-2. Explicar os três primeiros cenários e seus respectivos limites, sem
-   implementá-los no cluster.
-3. Apresentar o quarto cenário como a arquitetura escolhida. O ACM gerencia
-   o certificado; o ALB recebe HTTPS; o Target Group reúne os destinos HTTP.
-4. Sair do desenho para o console da AWS: solicitar o certificado, criar
-   os CNAMEs de validação no Route 53 e confirmar o estado `Issued`.
-5. Encerrar com o certificado pronto. ALB, Target Group, associação do
-   certificado e publicação de HTTPS ficam para o vídeo 6.
+O vídeo foi gravado com aproximadamente 20 minutos de explicação. A sequência
+dos diagramas foi mantida, mas a configuração do ACM ficou para o vídeo 6.
 
-O passo a passo do console está no
-[roteiro do vídeo 5](../../../seasons/02-high-availability/docs/video-roadmap.md#vídeo-5--certificados-no-swarm-e-configuração-do-acm).
+1. Retrospectiva: Traefik único com HTTPS via HTTP-01, depois Traefik global
+   em HTTP e cluster com três managers e três workers.
+2. Justificativas para ALB + ACM: devolver HTTPS como requisito determinante
+   e impedir acesso público direto às portas 80 e 443 dos nodes.
+3. Apresentação de DNS-01, HTTP-01 e Traefik único, com os respectivos limites.
+4. Encerramento dos desenhos com ACM + ALB + TG, fazendo o gancho para a
+   implementação no vídeo 6.
+
+Como bônus, foi feito o deploy da [stack do Excalidraw](../../../stacks/excalidraw.yml)
+e a apresentação dos diagramas foi feita nela. Os arquivos preservam os quadros
+usados na gravação; a previsão de ACM no vídeo 5 indicada no último quadro foi
+transferida para o vídeo 6.
+
+O conteúdo realizado está no
+[roadmap do vídeo 5](../../../seasons/02-high-availability/docs/video-roadmap.md#vídeo-5--por-que-alb-e-acm-certificados-e-segurança).
+O passo a passo do ACM e do ALB está no
+[roteiro do vídeo 6](../../../seasons/02-high-availability/docs/video-roadmap.md#vídeo-6--acm-alb-e-target-groups-publicando-https).
 
 ## Notas de narração
 
@@ -46,13 +54,13 @@ O passo a passo do console está no
 - No quarto quadro, o ACM fornece o certificado ao listener; não é um salto
   no caminho da requisição. O Target Group é um agrupamento lógico de destinos,
   não outro proxy entre o ALB e os managers.
-- O certificado do ALB protege cliente-ALB, não o HTTP interno. Restringir
-  a porta 80 dos managers ao SG do ALB faz parte do vídeo 6. Retirar IPs
-  públicos e migrar para subnets privadas são uma evolução posterior.
-- No ACM usamos validação por CNAME, diferente do TXT do ACME DNS-01.
-  Preservar os CNAMEs; a renovação gerenciada depende deles e do certificado
-  em uso num serviço integrado. Ao final deste vídeo ele ainda não está
-  associado ao ALB e a aplicação permanece em HTTP.
+- O certificado do ALB protege cliente-ALB, não o HTTP interno. No vídeo 6,
+  a porta 80 dos managers ficará restrita ao SG do ALB, sem acesso público
+  direto às portas 80/443 dos nodes. Retirar IPs públicos e migrar para
+  subnets privadas são uma evolução posterior.
+- A validação do ACM por CNAME e a emissão do certificado ficam para o
+  vídeo 6. Ao final do vídeo 5, a aplicação permanece em HTTP e a arquitetura
+  ACM + ALB + TG foi apenas apresentada nos desenhos.
 
 ## Referências
 

@@ -47,7 +47,7 @@ Target Group
 |     2 | Compreensão do quorum               | O cluster ainda possui um único manager |
 |     3 | Quorum e Traefik global em HTTP     | DNS sem health checks; HTTPS pendente   |
 |     4 | Workloads isolados nos workers      | A entrada ainda depende de DNS direto   |
-|     5 | Certificado emitido no ACM          | Falta associá-lo ao ALB e publicar HTTPS |
+|     5 | Certificados e segurança justificam ALB + ACM | Falta implementar ACM, ALB e Target Group |
 |     6 | Entrada HA com ALB e ACM            | A arquitetura ainda precisa ser provada |
 |     7 | HA validada por falhas controladas  | Limites da solução ficam documentados   |
 
@@ -66,8 +66,8 @@ Target Group
 - Executar WAF e aplicações somente nos workers.
 - Manter os managers em `Active` na operação normal para que possam executar
   o Traefik.
-- Emitir o certificado no ACM no vídeo 5 e encerrar TLS no ALB no vídeo 6,
-  quando o certificado for associado ao listener HTTPS.
+- Apresentar a escolha de ACM + ALB no vídeo 5. No vídeo 6, emitir o
+  certificado no ACM e associá-lo ao listener HTTPS para encerrar TLS no ALB.
 - Desativar HTTPS, ACME, `certresolver` e o volume de certificados no experimento
   HTTP do vídeo 3. Reintroduzir HTTPS público com ALB e ACM, sem devolver a
   emissão de certificados às réplicas do Traefik.
@@ -422,37 +422,52 @@ nem o HTTPS público.
 > Replicamos o proxy em HTTP. Como devolver HTTPS sem fazer cada instância
 > disputar a emissão e a renovação dos certificados?
 
-## Vídeo 5 — Certificados no Swarm e configuração do ACM
+## Vídeo 5 — Por que ALB e ACM? Certificados e segurança
 
-**Status:** planejado.
+**Status:** gravado, aproximadamente 20 minutos.
 
-**Formato:** explicação objetiva no Excalidraw seguida de configuração do ACM
-no console da AWS.
+**Formato:** explicação com os diagramas no Excalidraw. Como bônus, foi feito
+o deploy da própria stack do Excalidraw no cluster, usando-a na apresentação.
 
 **Material visual:** [quatro cenários editáveis](../../../docs/excalidraw/s02e05/README.md),
 na ordem DNS-01, HTTP-01, Traefik único e ACM + ALB + Target Group.
 
-**Pergunta central:** como tirar a gestão dos certificados das réplicas do
-Traefik e preparar o retorno do HTTPS?
+**Pergunta central:** por que adotar ALB e ACM para devolver HTTPS ao cluster
+e eliminar o acesso público direto às portas 80 e 443 dos nodes?
 
-**Entrega do episódio:** certificado público emitido no ACM, validado por DNS
-e pronto para o ALB. Criar ALB, Target Group, listeners e publicar HTTPS fica
-para o vídeo 6. Não alterar stacks, script de requisições, registros de
-tráfego, SGs ou IPs públicos neste episódio.
+**Escopo realizado:** retrospectiva do laboratório, explicação das alternativas
+de certificados e apresentação da arquitetura escolhida. Não houve emissão
+de certificado no ACM nem configuração de ALB ou Target Group neste vídeo;
+essa implementação fica para o vídeo 6.
 
-### Ponto de partida e abertura
+### Retrospectiva e estado do laboratório
 
-- Três managers, cada um com uma tarefa do Traefik global em HTTP na porta 80,
-  publicada em modo `host`.
-- WAF e API nos workers, conforme a separação do vídeo 4.
-- Registro A do Route 53 com os três EIPs dos managers.
+1. O primeiro Traefik atendia HTTPS com certificado emitido por ACME usando
+   o desafio HTTP-01.
+2. Para distribuir a entrada pelos managers, o Traefik passou a rodar em
+   modo global e o HTTPS foi desativado, mantendo o atendimento em HTTP.
+3. O cluster chegou a três managers e três workers, com Traefik nos managers
+   e WAF e API nos workers. O registro A continuou com os três EIPs dos managers.
+4. Com essa base pronta, faltava devolver HTTPS e melhorar a segurança da
+   entrada pública do cluster.
 
-> No vídeo 3 colocamos o Traefik em modo global e retiramos o HTTPS. Agora
-> precisamos devolver o certificado sem fazer cada réplica cuidar dessa
-> responsabilidade. Vamos comparar as opções e já emitir nosso certificado
-> no ACM.
+### Duas justificativas para ALB e ACM
 
-### Excalidraw: quatro cenários
+1. **Certificado, motivo determinante:** devolver HTTPS é um requisito
+   obrigatório do laboratório. A solução escolhida retira dos Traefiks a
+   responsabilidade pela emissão e renovação do certificado público,
+   centralizando essa gestão no ACM e a terminação TLS no ALB.
+2. **Segurança, segundo benefício:** deixar de permitir acesso direto da
+   Internet às portas 80 e 443 dos nodes. O ALB passa a ser a entrada pública,
+   e os managers recebem HTTP na porta do Traefik somente a partir do SG do
+   ALB. Não basta trocar o DNS; as permissões de acesso também precisam mudar.
+
+O requisito obrigatório é o retorno do HTTPS; ACM + ALB é a escolha deste
+laboratório, não a única forma de usar certificados com múltiplos Traefiks.
+Retirar IPs públicos e migrar os nodes para subnets privadas continua sendo
+uma evolução posterior. O certificado do ALB não criptografa o HTTP interno.
+
+### Diagramas apresentados, na ordem da gravação
 
 1. **DNS-01 com três Traefiks:** cada instância pode validar o domínio por
    TXT no Route 53, independentemente do destino HTTP. Isso funciona, mas
@@ -467,19 +482,60 @@ tráfego, SGs ou IPs públicos neste episódio.
    falhar, até sua recuperação.
 4. **ACM + ALB + Target Group:** certificado gerenciado no ACM, TLS encerrado
    no ALB e três Traefiks atendendo HTTP por IPs privados. O Target Group
-   organiza os destinos e seus health checks. Essa é a arquitetura de destino;
-   neste vídeo configuramos apenas o ACM.
+   organiza os destinos e seus health checks. Esse último desenho apresentou
+   a arquitetura de destino e fez o gancho para a implementação no vídeo 6.
 
-Existem soluções de emissão centralizada e distribuição de certificados sem
-ACM. A escolha do laboratório é a integração gerenciada com o ALB, retirando
-essa responsabilidade dos Traefiks e preparando o isolamento do cluster.
+### Bônus: Excalidraw no próprio cluster
 
-O certificado protege o trecho cliente-ALB, não o HTTP interno. Restringir a
-porta dos managers ao SG do ALB será parte do vídeo 6; retirar IPs públicos e
-migrar os nodes para subnets privadas é uma evolução posterior, não um efeito
-automático de criar o ALB.
+Foi feito o deploy da [stack do Excalidraw](../../../stacks/excalidraw.yml)
+e a ferramenta foi usada para apresentar os quatro diagramas. Essa foi a
+parte prática adicional do episódio, sem antecipar a configuração do ACM.
 
-### Prática: solicitar e validar o certificado no ACM
+### Resultado e gancho para o vídeo 6
+
+- Evolução do laboratório recapitulada, do Traefik único com HTTP-01 ao
+  cluster com três managers e três workers, ainda em HTTP.
+- Retorno do certificado estabelecido como justificativa determinante para
+  ACM + ALB, acompanhado da proteção contra acesso público direto aos nodes.
+- Quatro cenários apresentados, terminando na arquitetura ACM + ALB + TG.
+- Excalidraw publicado e usado na explicação.
+
+O episódio terminou com a arquitetura explicada, não implantada. O próximo
+passo é emitir o certificado no ACM, criar ALB e Target Group, publicar HTTPS
+e restringir o acesso direto às portas de aplicação dos nodes.
+
+## Vídeo 6 — ACM, ALB e Target Groups: publicando HTTPS
+
+**Status:** planejado.
+
+**Formato:** implementação da arquitetura apresentada no vídeo 5, começando
+pela solicitação e validação do certificado no ACM.
+
+**Pergunta central:** como publicar HTTPS no ALB e encaminhar as requisições
+para os Traefiks sem expor diretamente suas portas à Internet?
+
+### Arquitetura desejada
+
+```text
+Internet
+   ↓
+Route 53 alias
+   ↓
+ALB em múltiplas zonas
+   ├── listener HTTP  :80  → redirect
+   └── listener HTTPS :443 → certificado ACM
+                              ↓
+                         Target Group HTTP
+                         ├── manager-01:porta-traefik
+                         ├── manager-02:porta-traefik
+                         └── manager-03:porta-traefik
+                                      ↓
+                              Traefik → WAF → API
+```
+
+### Etapa 1: solicitar e validar o certificado no ACM
+
+Esta prática foi transferida para o vídeo 6; não foi realizada no vídeo 5.
 
 1. Abrir **AWS Certificate Manager** na região **N. Virginia (`us-east-1`)**,
    a mesma região em que o ALB será criado. O certificado precisa estar na
@@ -520,56 +576,18 @@ automático de criar o ALB.
    alguns minutos; cortar a espera na edição, sem prometer emissão imediata.
 10. Manter os CNAMEs no DNS público. A renovação gerenciada depende desses
     registros e do certificado em uso num serviço integrado, o que acontecerá
-    ao associá-lo ao ALB no vídeo 6.
+    na próxima etapa, ao associá-lo ao ALB.
 
-### Resultado e encerramento
+### Etapa 2: ALB, Target Group e publicação de HTTPS
 
-- Certificado **Issued** em `us-east-1`, cobrindo os dois nomes.
-- Registros de validação preservados no Route 53.
-- Certificado ainda sem associação ao ALB; a aplicação continua em HTTP.
-
-> Nosso certificado está emitido e pronto para uso. No próximo vídeo vamos
-> criar o ALB e o Target Group, associar esse certificado ao listener HTTPS
-> e trocar a entrada pública do cluster.
-
-## Vídeo 6 — ALB e Target Groups: publicando HTTPS
-
-**Status:** planejado.
-
-**Formato:** implementação da arquitetura apresentada no vídeo 5, usando o
-certificado já emitido no ACM.
-
-**Pergunta central:** como publicar HTTPS no ALB e encaminhar as requisições
-para os Traefiks sem expor diretamente suas portas à Internet?
-
-### Arquitetura desejada
-
-```text
-Internet
-   ↓
-Route 53 alias
-   ↓
-ALB em múltiplas zonas
-   ├── listener HTTP  :80  → redirect
-   └── listener HTTPS :443 → certificado ACM
-                              ↓
-                         Target Group HTTP
-                         ├── manager-01:porta-traefik
-                         ├── manager-02:porta-traefik
-                         └── manager-03:porta-traefik
-                                      ↓
-                              Traefik → WAF → API
-```
-
-### Roteiro
-
-1. Conferir o certificado do vídeo 5: estado `Issued`, nomes
+1. Conferir o certificado emitido na etapa anterior: estado `Issued`, nomes
    `swarm.dslab.dev.br` e `*.swarm.dslab.dev.br`, na região `us-east-1`.
-   Não emitir outro certificado; manter os CNAMEs de validação no Route 53.
+   Manter os CNAMEs de validação no Route 53.
 2. Criar o ALB nas zonas que contêm os targets.
 3. Criar um security group público para os listeners do ALB.
 4. Permitir que os managers recebam tráfego na porta do Traefik somente a partir
-   do security group do ALB.
+   do security group do ALB. Remover permissões públicas diretas para as portas
+   80 e 443 dos nodes; a porta 443 fica no ALB, sem listener HTTPS nos Traefiks.
 5. Criar o Target Group HTTP na porta 80 e registrar os três managers.
    Com EC2 provisionadas manualmente, novos managers também precisam ser
    registrados; o ALB não descobre a composição do Swarm automaticamente.
@@ -578,7 +596,7 @@ ALB em múltiplas zonas
 7. Configurar health check do Target Group com intervalo de 30 segundos e
    timeout de 5 segundos.
 8. Criar o listener HTTP com redirecionamento para HTTPS.
-9. Criar o listener HTTPS usando o certificado emitido no vídeo 5.
+9. Criar o listener HTTPS usando o certificado emitido na etapa anterior.
 10. Confirmar que o Traefik continua em modo global, restrito aos managers e
     com publicação de porta em modo host, como no experimento do vídeo 3.
 11. Verificar que o Traefik permanece sem os itens retirados na fase HTTP:
