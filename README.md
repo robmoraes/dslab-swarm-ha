@@ -22,6 +22,9 @@ material.
 ## Documentação
 
 - [Padrão mínimo de tags para laboratórios AWS](docs/aws-tags.md)
+- [Configuração manual do certificado ACM pelo console AWS](provisioning/acm/README.md)
+- [Provisionamento manual do ALB pelo console AWS](provisioning/alb/README.md)
+- [Policies IAM para os guias de provisionamento](provisioning/policies/README.md)
 
 ## Organização
 

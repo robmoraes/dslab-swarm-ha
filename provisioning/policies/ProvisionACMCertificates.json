@@ -1,0 +1,26 @@
+{
+  "Version": "2012-10-17",
+  "Statement": [
+    {
+      "Sid": "ProvisionACMCertificates",
+      "Effect": "Allow",
+      "Action": [
+        "acm:RequestCertificate",
+        "acm:ListCertificates",
+        "acm:SearchCertificates",
+        "acm:DescribeCertificate",
+        "acm:ListCertificateDomainValidations",
+        "acm:GetCertificate",
+        "acm:GetAccountConfiguration",
+        "acm:ListTagsForCertificate",
+        "acm:AddTagsToCertificate"
+      ],
+      "Resource": "*",
+      "Condition": {
+        "StringEquals": {
+          "aws:RequestedRegion": "us-east-1"
+        }
+      }
+    }
+  ]
+}

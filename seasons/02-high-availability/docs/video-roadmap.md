@@ -537,6 +537,8 @@ ALB em múltiplas zonas
 
 Esta prática foi transferida para o vídeo 6; não foi realizada no vídeo 5.
 
+Guia de execução: [configuração manual do ACM pelo console AWS](../../../provisioning/acm/README.md).
+
 1. Abrir **AWS Certificate Manager** na região **N. Virginia (`us-east-1`)**,
    a mesma região em que o ALB será criado. O certificado precisa estar na
    região do load balancer.
@@ -579,6 +581,9 @@ Esta prática foi transferida para o vídeo 6; não foi realizada no vídeo 5.
     na próxima etapa, ao associá-lo ao ALB.
 
 ### Etapa 2: ALB, Target Group e publicação de HTTPS
+
+Guia de execução: [provisionamento manual do ALB pelo console AWS](../../../provisioning/alb/README.md),
+com os [pacotes de permissões IAM](../../../provisioning/policies/README.md).
 
 1. Conferir o certificado emitido na etapa anterior: estado `Issued`, nomes
    `swarm.dslab.dev.br` e `*.swarm.dslab.dev.br`, na região `us-east-1`.

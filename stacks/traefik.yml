@@ -18,6 +18,10 @@ services:
       # Ativa dashboard interno do Traefik
       - --api.dashboard=true
 
+      - --ping=true
+      - --ping.entrypoint=web
+      - --entrypoints.web.forwardedheaders.trustedips=172.31.0.0/20,172.31.80.0/20,172.31.16.0/20
+
     ports:
       # Publica a porta diretamente em cada manager, sem Routing Mesh.
       - target: 80
