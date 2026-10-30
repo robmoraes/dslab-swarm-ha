@@ -6,7 +6,7 @@ i=1
 while true; do
   printf "call=%02d " "$i"
   curl -fs --no-keepalive --connect-timeout 2 --max-time 3 \
-    http://whoami.swarm.dslab.dev.br/metadata \
+    https://whoami.swarm.dslab.dev.br/metadata \
     | jq -r '
       (.host.hostname) as $host
       | ((.container.id // "")

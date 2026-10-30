@@ -87,7 +87,9 @@ Em **EC2 > Target Groups > Create target group**, preencher:
 
 Em **EC2 > Load Balancers > Create load balancer > Application Load Balancer**:
 
-- Nome: `swarm-ha-public-alb`; **Scheme: Internet-facing**; **IP address type: IPv4**.
+- Nome: `swarm-ha-public-alb`;
+- **Scheme: Internet-facing**;
+- **IP address type: IPv4**.
 - Em **Network mapping**, escolher a VPC e as tres zonas/subnets equivalente aos managers.
 - Em **Security groups**, selecionar somente `swarm-ha-alb-sg`.
 
