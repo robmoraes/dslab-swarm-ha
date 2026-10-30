@@ -18,6 +18,9 @@ services:
       # Ativa dashboard interno do Traefik
       - --api.dashboard=true
 
+      - --ping=true
+      - --ping.entrypoint=web
+
     ports:
       # Publica a porta diretamente em cada manager, sem Routing Mesh.
       - target: 80

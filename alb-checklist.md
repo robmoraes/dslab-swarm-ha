@@ -7,5 +7,7 @@
 - SG do ALB: Swarm HA ALB SG
 - ACM: swarm.dslab.dev.br
 - R53: record CNAME do desafio
-- Traefik: Health Check
-
+- IAM: Grupo de Usuario anexada policies
+- IAM: policies para ACM e ALB
+- Traefik: Health Check e trustedips
+- Script de Requests: https

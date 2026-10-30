@@ -41,15 +41,15 @@ Target Group
 
 ## Fio narrativo
 
-| Vídeo | Camada conquistada                  | Problema que permanece                  |
-| ----: | ----------------------------------- | --------------------------------------- |
-|     1 | Autoridade DNS e nomes canônicos    | O cluster ainda possui um único manager |
-|     2 | Compreensão do quorum               | O cluster ainda possui um único manager |
-|     3 | Quorum e Traefik global em HTTP     | DNS sem health checks; HTTPS pendente   |
-|     4 | Workloads isolados nos workers      | A entrada ainda depende de DNS direto   |
+| Vídeo | Camada conquistada                            | Problema que permanece                    |
+| ----: | --------------------------------------------- | ----------------------------------------- |
+|     1 | Autoridade DNS e nomes canônicos              | O cluster ainda possui um único manager   |
+|     2 | Compreensão do quorum                         | O cluster ainda possui um único manager   |
+|     3 | Quorum e Traefik global em HTTP               | DNS sem health checks; HTTPS pendente     |
+|     4 | Workloads isolados nos workers                | A entrada ainda depende de DNS direto     |
 |     5 | Certificados e segurança justificam ALB + ACM | Falta implementar ACM, ALB e Target Group |
-|     6 | Entrada HA com ALB e ACM            | A arquitetura ainda precisa ser provada |
-|     7 | HA validada por falhas controladas  | Limites da solução ficam documentados   |
+|     6 | Entrada HA com ALB e ACM                      | A arquitetura ainda precisa ser provada   |
+|     7 | HA validada por falhas controladas            | Limites da solução ficam documentados     |
 
 ## Decisões técnicas da temporada
 
@@ -506,8 +506,6 @@ e restringir o acesso direto às portas de aplicação dos nodes.
 
 ## Vídeo 6 — ACM, ALB e Target Groups: publicando HTTPS
 
-**Status:** planejado.
-
 **Formato:** implementação da arquitetura apresentada no vídeo 5, começando
 pela solicitação e validação do certificado no ACM.
 
@@ -533,95 +531,40 @@ ALB em múltiplas zonas
                               Traefik → WAF → API
 ```
 
-### Etapa 1: solicitar e validar o certificado no ACM
+### Execução
 
-Esta prática foi transferida para o vídeo 6; não foi realizada no vídeo 5.
+#### Certificate Manager
 
-Guia de execução: [configuração manual do ACM pelo console AWS](../../../provisioning/acm/README.md).
+[Configuração](../../../provisioning/acm/README.md)
 
-1. Abrir **AWS Certificate Manager** na região **N. Virginia (`us-east-1`)**,
-   a mesma região em que o ALB será criado. O certificado precisa estar na
-   região do load balancer.
-2. Selecionar **Request a certificate** e **Request a public certificate**.
-3. Adicionar os dois nomes:
+#### Traefik Health Check
 
-   ```text
-   swarm.dslab.dev.br
-   *.swarm.dslab.dev.br
-   ```
+Acrescentar um ping na stack do Traefik:
 
-   O wildcard cobre serviços como `whoami.swarm.dslab.dev.br`, mas não o
-   próprio `swarm.dslab.dev.br` nem subdomínios com mais níveis.
+```yaml
+- --ping=true
+- --ping.entrypoint=web
+```
 
-4. Escolher **DNS validation**, algoritmo **RSA 2048** e manter a exportação
-   desabilitada. O certificado será usado pela integração com o ALB, sem
-   exportar ou instalar chaves nos nodes.
-5. Aplicar o [padrão de tags do laboratório](../../../docs/aws-tags.md):
+Pra confirmar `curl -fsS http://127.0.0.1/ping`: deve retornar `OK`.
 
-   | Tag | Valor |
-   | --- | --- |
-   | `Name` | `swarm-ha-public-certificate` |
-   | `dslab:lab-id` | `swarm-ha` |
-   | `dslab:owner` | `dslab` |
+### ALB, Target Group e publicação de HTTPS
 
-6. Solicitar o certificado e abrir seus detalhes. Mostrar o estado inicial
-   **Pending validation** e a seção **Domains**.
-7. Usar **Create records in Route 53** e criar os CNAMEs de validação na hosted
-   zone pública `dslab.dev.br`. Se a opção não estiver disponível, cadastrar
-   manualmente no Route 53 os nomes e valores CNAME fornecidos pelo ACM.
-   O domínio base e o wildcard podem compartilhar o mesmo registro de
-   validação; não criar duplicatas conflitantes.
-8. Mostrar a diferença: aqui o ACM valida com **CNAME**, não com o TXT do
-   desafio ACME DNS-01. Não substituir o registro A com os três EIPs nem o
-   wildcard que encaminha os serviços para o domínio raiz.
-9. Aguardar a validação e conferir **Issued**. A atualização pode levar
-   alguns minutos; cortar a espera na edição, sem prometer emissão imediata.
-10. Manter os CNAMEs no DNS público. A renovação gerenciada depende desses
-    registros e do certificado em uso num serviço integrado, o que acontecerá
-    na próxima etapa, ao associá-lo ao ALB.
+[Configuração](../../../provisioning/alb/README.md),
 
-### Etapa 2: ALB, Target Group e publicação de HTTPS
+### Ajuste no Traefik
 
-Guia de execução: [provisionamento manual do ALB pelo console AWS](../../../provisioning/alb/README.md),
-com os [pacotes de permissões IAM](../../../provisioning/policies/README.md).
+Como o HTTPS termina no ALB e dali pra frente a conexão é HTTP, essa
+linha faz o Traefik confiar nas informações que o ALB repassa, como o IP
+do cliente e o fato de ele ter acessado por HTTPS.
 
-1. Conferir o certificado emitido na etapa anterior: estado `Issued`, nomes
-   `swarm.dslab.dev.br` e `*.swarm.dslab.dev.br`, na região `us-east-1`.
-   Manter os CNAMEs de validação no Route 53.
-2. Criar o ALB nas zonas que contêm os targets.
-3. Criar um security group público para os listeners do ALB.
-4. Permitir que os managers recebam tráfego na porta do Traefik somente a partir
-   do security group do ALB. Remover permissões públicas diretas para as portas
-   80 e 443 dos nodes; a porta 443 fica no ALB, sem listener HTTPS nos Traefiks.
-5. Criar o Target Group HTTP na porta 80 e registrar os três managers.
-   Com EC2 provisionadas manualmente, novos managers também precisam ser
-   registrados; o ALB não descobre a composição do Swarm automaticamente.
-6. Criar um endpoint ou router dedicado ao health check que não dependa do
-   `Host` público enviado pelo cliente.
-7. Configurar health check do Target Group com intervalo de 30 segundos e
-   timeout de 5 segundos.
-8. Criar o listener HTTP com redirecionamento para HTTPS.
-9. Criar o listener HTTPS usando o certificado emitido na etapa anterior.
-10. Confirmar que o Traefik continua em modo global, restrito aos managers e
-    com publicação de porta em modo host, como no experimento do vídeo 3.
-11. Verificar que o Traefik permanece sem os itens retirados na fase HTTP:
-    - HTTP-01;
-    - `certresolver`;
-    - `acme.json`;
-    - volume de certificados;
-    - router HTTPS interno que deixou de existir.
-12. Manter um router HTTP interno, pois o TLS termina no ALB.
-13. Configurar health checks do Traefik para o serviço realmente exposto, usando
-    endpoint leve, intervalo de 30 segundos e timeout entre 3 e 5 segundos.
-14. Trocar o registro A de `swarm.dslab.dev.br` por um Alias para o ALB.
-    Manter o wildcard apontando para esse nome raiz.
-15. Validar a cadeia de encaminhamento:
-    - ALB adiciona os headers `X-Forwarded-*`;
-    - Traefik confia somente nos proxies e redes previstos;
-    - WAF propaga os headers;
-    - aplicação interpreta e exibe o IP correto do cliente.
-16. Garantir que comunicações entre stacks usem nomes Swarm qualificados no
-    formato `<stack>_<serviço>`.
+Verificar os CIDRs das Subnets escolhidas para o ALB.
+
+Adicionar no CMD da stack do Traefik:
+
+```yaml
+- --entrypoints.web.forwardedheaders.trustedips=172.31.0.0/20,172.31.80.0/20,172.31.16.0/20
+```
 
 ### Resultado
 
@@ -635,9 +578,6 @@ com os [pacotes de permissões IAM](../../../provisioning/policies/README.md).
 
 > Construímos a arquitetura. Agora precisamos provar que ela realmente
 > sobrevive às falhas que derrubavam o laboratório anterior.
-
-> Se a implementação ficar longa, este vídeo pode ser dividido em “Desenhando a
-> borda HA” e “Implementando ALB + Target Groups”, sem alterar a ordem conceitual.
 
 ## Vídeo 7 — Chaos Day: agora temos HA de verdade?
 

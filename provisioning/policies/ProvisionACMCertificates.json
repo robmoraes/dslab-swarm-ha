@@ -13,7 +13,8 @@
         "acm:GetCertificate",
         "acm:GetAccountConfiguration",
         "acm:ListTagsForCertificate",
-        "acm:AddTagsToCertificate"
+        "acm:AddTagsToCertificate",
+        "acm-pca:ListCertificateAuthorities"
       ],
       "Resource": "*",
       "Condition": {
